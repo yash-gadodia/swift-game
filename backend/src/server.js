@@ -347,6 +347,10 @@ wss.on('connection', (ws, req) => {
 
   ws.send(JSON.stringify({ type: 'role_assigned', role: player.role }));
   ws.send(JSON.stringify({ type: 'room_state', room: roomState(roomCode) }));
+  for (const other of room.players) {
+    if (other.playerId === playerId) continue;
+    ws.send(JSON.stringify({ type: 'peer_joined', senderId: other.playerId }));
+  }
   broadcast(roomCode, { type: 'peer_joined', senderId: playerId }, ws);
 
   ws.on('message', (raw) => {
