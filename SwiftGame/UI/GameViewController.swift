@@ -6,7 +6,7 @@ final class GameViewController: UIViewController {
     private let localPlayerId: UUID
     private let localRole: PlayerRole
     private let level: DailyLevelV1
-    private let duoId: String
+    private let roomCode: String
     private let apiClient: APIClient
 
     private let skView = SKView()
@@ -20,14 +20,14 @@ final class GameViewController: UIViewController {
         localPlayerId: UUID,
         localRole: PlayerRole,
         level: DailyLevelV1,
-        duoId: String,
+        roomCode: String,
         apiClient: APIClient
     ) {
         self.transport = transport
         self.localPlayerId = localPlayerId
         self.localRole = localRole
         self.level = level
-        self.duoId = duoId
+        self.roomCode = roomCode
         self.apiClient = apiClient
         super.init(nibName: nil, bundle: nil)
     }
@@ -145,10 +145,13 @@ final class GameViewController: UIViewController {
     private func handleLevelCompletion() {
         Task {
             do {
-                try await apiClient.recordCompletion(duoId: duoId, levelId: level.levelId)
-                let payload = try await apiClient.fetchPostcardPayload(duoId: duoId)
+                let completion = try await apiClient.recordCompletion(
+                    roomCode: roomCode,
+                    playerId: localPlayerId,
+                    levelId: level.levelId
+                )
                 await MainActor.run {
-                    self.presentShareSheet(payload: payload)
+                    self.presentCompletionOutcome(completion)
                 }
             } catch {
                 await MainActor.run {
@@ -158,6 +161,34 @@ final class GameViewController: UIViewController {
                 }
             }
         }
+    }
+
+    private func presentCompletionOutcome(_ completion: CompletionResponse) {
+        if let duoId = completion.duoId {
+            Task {
+                do {
+                    let payload = try await apiClient.fetchPostcardPayload(duoId: duoId)
+                    await MainActor.run {
+                        self.presentShareSheet(payload: payload)
+                    }
+                } catch {
+                    await MainActor.run {
+                        let alert = UIAlertController(title: "Completed", message: "Partner linked, postcard pending. \(error.localizedDescription)", preferredStyle: .alert)
+                        alert.addAction(UIAlertAction(title: "OK", style: .default))
+                        self.present(alert, animated: true)
+                    }
+                }
+            }
+            return
+        }
+
+        let alert = UIAlertController(
+            title: "Checkpoint Saved",
+            message: "Waiting for your partner to finish this level.",
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "OK", style: .default))
+        present(alert, animated: true)
     }
 
     private func presentShareSheet(payload: PostcardPayloadV1) {

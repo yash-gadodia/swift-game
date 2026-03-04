@@ -8,25 +8,17 @@ final class LobbyViewController: UIViewController {
     private var apiClient: APIClient?
     private var apiBaseURL: URL?
 
-    private var duoProfile: DuoProfileV1?
     private var currentRole: PlayerRole?
     private var activeRoomCode: String?
     private var activeLevel: DailyLevelV1?
 
     private let titleLabel = UILabel()
     private let statusLabel = UILabel()
-
     private let serverField = UITextField()
-    private let duoNameField = UITextField()
-    private let duoCodeField = UITextField()
     private let roomCodeField = UITextField()
+    private let playButton = UIButton(type: .system)
+    private let pasteButton = UIButton(type: .system)
 
-    private let createDuoButton = UIButton(type: .system)
-    private let joinDuoButton = UIButton(type: .system)
-    private let createRoomButton = UIButton(type: .system)
-    private let joinRoomButton = UIButton(type: .system)
-
-    private let streakLabel = UILabel()
     private var hasPresentedGame = false
 
     override func viewDidLoad() {
@@ -52,40 +44,30 @@ final class LobbyViewController: UIViewController {
         statusLabel.font = UIFont.monospacedSystemFont(ofSize: 13, weight: .regular)
         statusLabel.numberOfLines = 0
         statusLabel.textColor = UIColor(white: 0.9, alpha: 1)
-        statusLabel.text = "Set server URL, create/join duo, then create/join room."
+        statusLabel.text = "Enter 4-digit room code and tap Play."
 
-        streakLabel.translatesAutoresizingMaskIntoConstraints = false
-        streakLabel.font = UIFont.systemFont(ofSize: 14, weight: .medium)
-        streakLabel.textColor = UIColor(red: 0.84, green: 0.9, blue: 0.73, alpha: 1)
-        streakLabel.text = "Duo streak: -"
-
-        configureField(serverField, placeholder: "Server URL (e.g. http://127.0.0.1:8081)")
+        configureField(serverField, placeholder: "Server URL (dev)")
         serverField.text = "http://127.0.0.1:8081"
 
-        configureField(duoNameField, placeholder: "Duo name (for create)")
-        duoNameField.text = "Forest Duo"
-
-        configureField(duoCodeField, placeholder: "Duo code (for join)")
         configureField(roomCodeField, placeholder: "Room code (4 digits)")
         roomCodeField.keyboardType = .numberPad
 
-        configureButton(createDuoButton, title: "Create Duo", action: #selector(createDuoTapped))
-        configureButton(joinDuoButton, title: "Join Duo", action: #selector(joinDuoTapped))
-        configureButton(createRoomButton, title: "Create Daily Room", action: #selector(createRoomTapped))
-        configureButton(joinRoomButton, title: "Join Daily Room", action: #selector(joinRoomTapped))
+        configureButton(playButton, title: "Play", action: #selector(playTapped))
+        configureButton(pasteButton, title: "Paste", action: #selector(pasteTapped))
+        pasteButton.backgroundColor = UIColor(red: 0.24, green: 0.33, blue: 0.27, alpha: 1)
+
+        let buttonRow = UIStackView(arrangedSubviews: [playButton, pasteButton])
+        buttonRow.translatesAutoresizingMaskIntoConstraints = false
+        buttonRow.axis = .horizontal
+        buttonRow.spacing = 10
+        buttonRow.distribution = .fillEqually
 
         let stack = UIStackView(arrangedSubviews: [
             titleLabel,
             statusLabel,
-            streakLabel,
             serverField,
-            duoNameField,
-            createDuoButton,
-            duoCodeField,
-            joinDuoButton,
-            createRoomButton,
             roomCodeField,
-            joinRoomButton
+            buttonRow
         ])
         stack.translatesAutoresizingMaskIntoConstraints = false
         stack.axis = .vertical
@@ -99,10 +81,10 @@ final class LobbyViewController: UIViewController {
             stack.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 20)
         ])
 
-        [serverField, duoNameField, duoCodeField, roomCodeField].forEach {
+        [serverField, roomCodeField].forEach {
             $0.heightAnchor.constraint(equalToConstant: 42).isActive = true
         }
-        [createDuoButton, joinDuoButton, createRoomButton, joinRoomButton].forEach {
+        [playButton, pasteButton].forEach {
             $0.heightAnchor.constraint(equalToConstant: 48).isActive = true
         }
     }
@@ -139,10 +121,11 @@ final class LobbyViewController: UIViewController {
 
         transport.onRoleAssigned = { [weak self] role in
             self?.currentRole = role
-            self?.statusLabel.text = "Role assigned: \(role.rawValue.capitalized)"
+            self?.statusLabel.text = "Role: \(role.rawValue.capitalized)"
         }
 
         transport.onPeerConnected = { [weak self] _ in
+            self?.statusLabel.text = "Partner connected. Joining game..."
             self?.presentGameIfReady()
         }
 
@@ -152,123 +135,68 @@ final class LobbyViewController: UIViewController {
         }
     }
 
-    @objc private func createDuoTapped() {
+    @objc private func playTapped() {
         guard let api = makeAPIClient() else { return }
-        let duoName = duoNameField.text?.trimmingCharacters(in: .whitespacesAndNewlines)
-        let safeName = duoName?.isEmpty == false ? duoName! : "Forest Duo"
-
-        Task {
-            do {
-                let profile = try await api.createDuo(duoName: safeName, playerName: localPlayerName)
-                await MainActor.run {
-                    self.duoProfile = profile
-                    self.duoCodeField.text = profile.duoCode
-                    self.streakLabel.text = "Duo streak: \(profile.currentStreak) | Grace: \(profile.graceTokens)"
-                    self.statusLabel.text = "Duo created. Share code \(profile.duoCode)."
-                }
-            } catch {
-                await MainActor.run {
-                    self.statusLabel.text = "Create duo failed: \(error.localizedDescription)"
-                }
-            }
-        }
-    }
-
-    @objc private func joinDuoTapped() {
-        guard let api = makeAPIClient() else { return }
-        let code = duoCodeField.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        guard !code.isEmpty else {
-            statusLabel.text = "Enter duo code first"
-            return
-        }
-
-        Task {
-            do {
-                let profile = try await api.joinDuo(duoCode: code, playerName: localPlayerName)
-                await MainActor.run {
-                    self.duoProfile = profile
-                    self.streakLabel.text = "Duo streak: \(profile.currentStreak) | Grace: \(profile.graceTokens)"
-                    self.statusLabel.text = "Duo joined: \(profile.duoName)"
-                }
-            } catch {
-                await MainActor.run {
-                    self.statusLabel.text = "Join duo failed: \(error.localizedDescription)"
-                }
-            }
-        }
-    }
-
-    @objc private func createRoomTapped() {
-        guard let api = makeAPIClient() else { return }
-        guard let duo = duoProfile else {
-            statusLabel.text = "Create or join duo first"
-            return
-        }
-
-        Task {
-            do {
-                let room = try await api.createRoom(duoId: duo.duoId, playerId: localPlayerId, playerName: localPlayerName)
-                let daily = try await api.fetchDailyLevel(for: Self.utcDateString(from: Date()))
-                await MainActor.run {
-                    self.activeLevel = daily.level
-                    self.currentRole = room.role
-                    self.transport.connectSocket(serverURL: self.serverURL(), roomCode: room.roomCode, playerId: self.localPlayerId)
-                    self.statusLabel.text = "Room \(room.roomCode) ready. Waiting for partner..."
-                }
-            } catch {
-                await MainActor.run {
-                    self.statusLabel.text = "Create room failed: \(error.localizedDescription)"
-                }
-            }
-        }
-    }
-
-    @objc private func joinRoomTapped() {
-        guard let api = makeAPIClient() else { return }
-        guard let duo = duoProfile else {
-            statusLabel.text = "Create or join duo first"
-            return
-        }
-
-        let roomCode = roomCodeField.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let roomCode = normalizedRoomCode()
         guard roomCode.count == 4 else {
-            statusLabel.text = "Room code must be 4 digits"
+            statusLabel.text = "Invalid code: enter 4 digits"
             return
         }
 
         Task {
             do {
-                let room = try await api.joinRoom(roomCode: roomCode, duoId: duo.duoId, playerId: localPlayerId, playerName: localPlayerName)
+                let room = try await api.enterRoom(roomCode: roomCode, playerId: localPlayerId, playerName: localPlayerName)
                 let daily = try await api.fetchDailyLevel(for: Self.utcDateString(from: Date()))
                 await MainActor.run {
                     self.activeLevel = daily.level
                     self.currentRole = room.role
-                    self.transport.connectSocket(serverURL: self.serverURL(), roomCode: roomCode, playerId: self.localPlayerId)
-                    self.statusLabel.text = "Joined room \(roomCode). Waiting for sync..."
+                    self.activeRoomCode = room.roomCode
+                    self.transport.connectSocket(serverURL: self.serverURL(), roomCode: room.roomCode, playerId: self.localPlayerId)
+
+                    if room.partnerConnected {
+                        self.statusLabel.text = "Partner connected. Joining game..."
+                        self.presentGameIfReady()
+                    } else {
+                        self.statusLabel.text = "Waiting for partner..."
+                    }
                 }
             } catch {
                 await MainActor.run {
-                    self.statusLabel.text = "Join room failed: \(error.localizedDescription)"
+                    self.statusLabel.text = "Play failed: \(self.friendlyError(error))"
                 }
             }
         }
+    }
+
+    @objc private func pasteTapped() {
+        let pasted = UIPasteboard.general.string ?? ""
+        roomCodeField.text = String(pasted.filter(\.isNumber).prefix(4))
+    }
+
+    private func normalizedRoomCode() -> String {
+        let raw = roomCodeField.text ?? ""
+        return String(raw.filter(\.isNumber).prefix(4))
     }
 
     private func presentGameIfReady() {
         guard !hasPresentedGame else { return }
-        guard let role = currentRole, let level = activeLevel, let duoId = duoProfile?.duoId, let api = apiClient else {
-            statusLabel.text = "Waiting for role + daily level"
+        guard
+            let role = currentRole,
+            let level = activeLevel,
+            let roomCode = activeRoomCode,
+            let api = apiClient,
+            transport.connectedPeerCount > 0
+        else {
             return
         }
 
         hasPresentedGame = true
-
         let gameVC = GameViewController(
             transport: transport,
             localPlayerId: localPlayerId,
             localRole: role,
             level: level,
-            duoId: duoId,
+            roomCode: roomCode,
             apiClient: api
         )
         gameVC.modalPresentationStyle = .fullScreen
@@ -291,6 +219,13 @@ final class LobbyViewController: UIViewController {
 
     private func serverURL() -> URL {
         URL(string: serverField.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "http://127.0.0.1:8081")!
+    }
+
+    private func friendlyError(_ error: Error) -> String {
+        let msg = error.localizedDescription.lowercased()
+        if msg.contains("room_full") { return "Room already has 2 players" }
+        if msg.contains("invalid_room_code") { return "Invalid code: enter 4 digits" }
+        return error.localizedDescription
     }
 
     private static func utcDateString(from date: Date) -> String {

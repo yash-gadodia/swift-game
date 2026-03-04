@@ -11,6 +11,12 @@ struct DuoProfileV1: Codable {
     let milestonesUnlocked: [Int]
 }
 
+enum RoomEnterState: String, Codable {
+    case created
+    case joined
+    case rejoined
+}
+
 struct DailyLevelV1: Codable {
     struct Entity: Codable {
         let kind: String
@@ -41,7 +47,8 @@ struct SanctuaryStateV1: Codable {
 }
 
 struct CompletionEventV1: Codable {
-    let duoId: String
+    let roomCode: String
+    let playerId: String
     let dateUTC: String
     let completedAt: String
     let levelId: String
@@ -56,9 +63,20 @@ struct PostcardPayloadV1: Codable {
     let sanctuaryPreviewSeed: Int
 }
 
-struct RoomCreateResponse: Codable {
+struct RoomEnterResponse: Codable {
     let roomCode: String
     let role: PlayerRole
+    let state: RoomEnterState
+    let duoId: String?
+    let partnerConnected: Bool
+}
+
+struct CompletionResponse: Codable {
+    let ok: Bool
+    let idempotent: Bool
+    let duoId: String?
+    let status: String
+    let profile: DuoProfileV1?
 }
 
 struct DailyLevelResponse: Codable {

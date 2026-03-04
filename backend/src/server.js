@@ -23,8 +23,11 @@ if (redis) {
 const memory = {
   duos: new Map(),
   duoByCode: new Map(),
+  duoByPlayers: new Map(),
   rooms: new Map(),
   completions: new Set(),
+  duoCompletionAwards: new Set(),
+  roomCompletionMembers: new Map(),
   dailyLevels: new Map()
 };
 
@@ -49,6 +52,79 @@ function generateCode(length = 4) {
     out += String(Math.floor(Math.random() * 10));
   }
   return out;
+}
+
+function pairKey(playerAId, playerBId) {
+  return [playerAId, playerBId].sort().join(':');
+}
+
+function isRoomCodeValid(roomCode) {
+  return /^[0-9]{4}$/.test(roomCode);
+}
+
+function applyStreakUpdate(profile, dateUTC) {
+  if (profile.lastCompletedDateUTC) {
+    const diff = dayDiff(dateUTC, profile.lastCompletedDateUTC);
+    if (diff === 1) {
+      profile.currentStreak += 1;
+    } else if (diff > 1) {
+      if (profile.graceTokens > 0) {
+        profile.graceTokens -= 1;
+        profile.currentStreak += 1;
+      } else {
+        profile.currentStreak = 1;
+      }
+    }
+  } else {
+    profile.currentStreak = 1;
+  }
+
+  profile.lastCompletedDateUTC = dateUTC;
+  if (profile.currentStreak >= 3 && !profile.milestonesUnlocked.includes(3)) profile.milestonesUnlocked.push(3);
+  if (profile.currentStreak >= 7 && !profile.milestonesUnlocked.includes(7)) profile.milestonesUnlocked.push(7);
+  if (profile.currentStreak >= 14 && !profile.milestonesUnlocked.includes(14)) profile.milestonesUnlocked.push(14);
+}
+
+function ensureDuoForPair(memberA, memberB) {
+  const key = pairKey(memberA.playerId, memberB.playerId);
+  const existingId = memory.duoByPlayers.get(key);
+  if (existingId && memory.duos.has(existingId)) {
+    return memory.duos.get(existingId);
+  }
+
+  let duoCode = generateCode(6);
+  while (memory.duoByCode.has(duoCode)) {
+    duoCode = generateCode(6);
+  }
+
+  const duoId = `duo_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
+  const profile = {
+    duoId,
+    duoCode,
+    duoName: `${memberA.playerName} + ${memberB.playerName}`,
+    memberA: memberA.playerName,
+    memberB: memberB.playerName,
+    currentStreak: 0,
+    lastCompletedDateUTC: null,
+    graceTokens: 1,
+    milestonesUnlocked: []
+  };
+
+  memory.duos.set(duoId, profile);
+  memory.duoByCode.set(duoCode, duoId);
+  memory.duoByPlayers.set(key, duoId);
+  return profile;
+}
+
+function getActiveRoom(roomCode) {
+  const room = memory.rooms.get(roomCode);
+  if (!room) return null;
+  if (room.expiresAt < Date.now()) {
+    memory.rooms.delete(roomCode);
+    wsRooms.delete(roomCode);
+    return null;
+  }
+  return room;
 }
 
 function loadInitialLevels() {
@@ -94,13 +170,14 @@ function validateLevelPayload(level) {
 }
 
 function roomState(roomCode) {
-  const room = memory.rooms.get(roomCode);
+  const room = getActiveRoom(roomCode);
   if (!room) return null;
   return {
     roomCode,
     duoId: room.duoId,
     players: room.players,
-    expiresAt: room.expiresAt
+    expiresAt: room.expiresAt,
+    dailyDateUTC: room.dailyDateUTC
   };
 }
 
@@ -190,6 +267,75 @@ app.post('/rooms/create', (req, res) => {
   res.json({ roomCode, role: 'anchor' });
 });
 
+app.post('/rooms/enter', (req, res) => {
+  const roomCode = String(req.body?.roomCode || '').trim();
+  const playerId = String(req.body?.playerId || '');
+  const playerName = String(req.body?.playerName || 'Player');
+
+  if (!isRoomCodeValid(roomCode)) {
+    return res.status(400).json({ error: 'invalid_room_code' });
+  }
+  if (!playerId) {
+    return res.status(400).json({ error: 'missing_player_id' });
+  }
+
+  let room = getActiveRoom(roomCode);
+  if (!room) {
+    room = {
+      roomCode,
+      duoId: null,
+      players: [{ playerId, playerName, role: 'anchor' }],
+      expiresAt: Date.now() + 10 * 60 * 1000,
+      createdAt: Date.now(),
+      dailyDateUTC: isoDateUTC()
+    };
+    memory.rooms.set(roomCode, room);
+    return res.json({
+      roomCode,
+      role: 'anchor',
+      state: 'created',
+      duoId: null,
+      partnerConnected: false
+    });
+  }
+
+  const existing = room.players.find((p) => p.playerId === playerId);
+  if (existing) {
+    room.expiresAt = Date.now() + 10 * 60 * 1000;
+    memory.rooms.set(roomCode, room);
+
+    const other = room.players.find((p) => p.playerId !== playerId);
+    const duoId = other ? memory.duoByPlayers.get(pairKey(playerId, other.playerId)) || null : null;
+
+    return res.json({
+      roomCode,
+      role: existing.role,
+      state: 'rejoined',
+      duoId,
+      partnerConnected: room.players.length > 1
+    });
+  }
+
+  if (room.players.length >= 2) {
+    return res.status(409).json({ error: 'room_full' });
+  }
+
+  room.players.push({ playerId, playerName, role: 'dash' });
+  room.expiresAt = Date.now() + 10 * 60 * 1000;
+  memory.rooms.set(roomCode, room);
+
+  const other = room.players.find((p) => p.playerId !== playerId);
+  const duoId = other ? memory.duoByPlayers.get(pairKey(playerId, other.playerId)) || null : null;
+
+  return res.json({
+    roomCode,
+    role: 'dash',
+    state: 'joined',
+    duoId,
+    partnerConnected: true
+  });
+});
+
 app.post('/rooms/join', (req, res) => {
   const roomCode = String(req.body?.roomCode || '').trim();
   const duoId = String(req.body?.duoId || '');
@@ -242,47 +388,64 @@ app.post('/daily-level', (req, res) => {
 });
 
 app.post('/daily-completion', (req, res) => {
-  const duoId = String(req.body?.duoId || '');
+  const roomCode = String(req.body?.roomCode || '').trim();
+  const playerId = String(req.body?.playerId || '');
   const levelId = String(req.body?.levelId || '');
   const completedAt = String(req.body?.completedAt || new Date().toISOString());
   const dateUTC = isoDateUTC(new Date(completedAt));
 
-  const profile = memory.duos.get(duoId);
-  if (!profile) {
-    return res.status(404).json({ error: 'duo_not_found' });
+  const room = getActiveRoom(roomCode);
+  if (!room) {
+    return res.status(404).json({ error: 'room_not_found' });
+  }
+  const player = room.players.find((member) => member.playerId === playerId);
+  if (!player) {
+    return res.status(403).json({ error: 'player_not_in_room' });
   }
 
-  const eventKey = `${duoId}:${dateUTC}:${levelId}`;
+  const eventKey = `${roomCode}:${dateUTC}:${levelId}:${playerId}`;
   if (memory.completions.has(eventKey)) {
-    return res.json({ ok: true, idempotent: true, profile });
+    const partner = room.players.find((member) => member.playerId !== playerId);
+    const duoId = partner ? memory.duoByPlayers.get(pairKey(playerId, partner.playerId)) || null : null;
+    return res.json({ ok: true, idempotent: true, duoId, status: 'already_recorded', profile: duoId ? memory.duos.get(duoId) : null });
   }
 
   memory.completions.add(eventKey);
 
-  if (profile.lastCompletedDateUTC) {
-    const diff = dayDiff(dateUTC, profile.lastCompletedDateUTC);
-    if (diff === 1) {
-      profile.currentStreak += 1;
-    } else if (diff > 1) {
-      if (profile.graceTokens > 0) {
-        profile.graceTokens -= 1;
-        profile.currentStreak += 1;
-      } else {
-        profile.currentStreak = 1;
-      }
-    }
-  } else {
-    profile.currentStreak = 1;
+  const roomCompletionKey = `${roomCode}:${dateUTC}:${levelId}`;
+  const completedMembers = memory.roomCompletionMembers.get(roomCompletionKey) || new Set();
+  completedMembers.add(playerId);
+  memory.roomCompletionMembers.set(roomCompletionKey, completedMembers);
+
+  if (completedMembers.size < 2 || room.players.length < 2) {
+    return res.json({
+      ok: true,
+      idempotent: false,
+      duoId: null,
+      status: 'awaiting_partner_completion',
+      profile: null
+    });
   }
 
-  profile.lastCompletedDateUTC = dateUTC;
-  if (profile.currentStreak >= 3 && !profile.milestonesUnlocked.includes(3)) profile.milestonesUnlocked.push(3);
-  if (profile.currentStreak >= 7 && !profile.milestonesUnlocked.includes(7)) profile.milestonesUnlocked.push(7);
-  if (profile.currentStreak >= 14 && !profile.milestonesUnlocked.includes(14)) profile.milestonesUnlocked.push(14);
+  const [memberA, memberB] = room.players;
+  const profile = ensureDuoForPair(memberA, memberB);
+  room.duoId = profile.duoId;
+  memory.rooms.set(roomCode, room);
 
-  memory.duos.set(duoId, profile);
+  const awardKey = `${profile.duoId}:${dateUTC}:${levelId}`;
+  if (!memory.duoCompletionAwards.has(awardKey)) {
+    applyStreakUpdate(profile, dateUTC);
+    memory.duos.set(profile.duoId, profile);
+    memory.duoCompletionAwards.add(awardKey);
+  }
 
-  res.json({ ok: true, idempotent: false, profile });
+  res.json({
+    ok: true,
+    idempotent: false,
+    duoId: profile.duoId,
+    status: 'duo_completion_recorded',
+    profile
+  });
 });
 
 app.get('/postcard-payload', (req, res) => {
