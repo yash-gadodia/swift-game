@@ -1,44 +1,59 @@
 import SpriteKit
-import MultipeerConnectivity
 import simd
 import QuartzCore
 
 final class GameScene: SKScene {
     var inputVector: SIMD2<Float> = .zero
+    var actionPressed = false
+    var onLevelCompleted: (() -> Void)?
 
     private let transport: SessionTransport
     private let localPlayerId: UUID
+    private let localRole: PlayerRole
+    private let level: DailyLevelV1
 
-    private let gameState = GameState(localPosition: SIMD2<Float>(-110, 0))
+    private let gameState = GameState(localPosition: SIMD2<Float>(-220, -110))
 
-    private let localNode = SKSpriteNode(color: .systemGreen, size: CGSize(width: 34, height: 34))
-    private let remoteNode = SKSpriteNode(color: .systemBlue, size: CGSize(width: 34, height: 34))
+    private let localNode = SKSpriteNode(color: UIColor(red: 0.72, green: 0.85, blue: 0.67, alpha: 1), size: CGSize(width: 28, height: 40))
+    private let remoteNode = SKSpriteNode(color: UIColor(red: 0.52, green: 0.67, blue: 0.84, alpha: 1), size: CGSize(width: 28, height: 40))
+
+    private let switchNode = SKSpriteNode(color: .brown, size: CGSize(width: 24, height: 16))
+    private let gateNode = SKSpriteNode(color: .darkGray, size: CGSize(width: 20, height: 100))
+    private let dashPlateNode = SKSpriteNode(color: .orange, size: CGSize(width: 28, height: 8))
+    private let winZoneNode = SKSpriteNode(color: .systemGreen, size: CGSize(width: 40, height: 80))
 
     private let statusLabel = SKLabelNode(fontNamed: "Menlo-Bold")
+    private let objectiveLabel = SKLabelNode(fontNamed: "Menlo")
     private let metricsLabel = SKLabelNode(fontNamed: "Menlo")
-    private let disconnectLabel = SKLabelNode(fontNamed: "Menlo-Bold")
 
-    private let moveSpeed: Float = 150
+    private let moveSpeed: Float = 130
     private var lastUpdateTime: TimeInterval = 0
     private var sequence: UInt32 = 0
-
     private var sendAccumulator: TimeInterval = 0
     private let sendInterval: TimeInterval = 0.05
 
     private var pingAccumulator: TimeInterval = 0
     private var pendingPingTimestamp: TimeInterval?
     private var latestRTTMs: Int = 0
-
     private var packetsThisSecond = 0
     private var packetsPerSecond = 0
     private var packetCounterTime: TimeInterval = 0
 
-    private var remotePlayerId: UUID?
     private var remoteConnected = false
+    private var remotePlayerId: UUID?
 
-    init(size: CGSize, transport: SessionTransport, localPlayerId: UUID) {
+    private var localSwitchActive = false
+    private var remoteSwitchActive = false
+    private var localDashPlateActive = false
+    private var remoteDashPlateActive = false
+
+    private var levelCompleted = false
+
+    init(size: CGSize, transport: SessionTransport, localPlayerId: UUID, localRole: PlayerRole, level: DailyLevelV1) {
         self.transport = transport
         self.localPlayerId = localPlayerId
+        self.localRole = localRole
+        self.level = level
         super.init(size: size)
     }
 
@@ -47,66 +62,80 @@ final class GameScene: SKScene {
     }
 
     override func didMove(to view: SKView) {
-        backgroundColor = UIColor(red: 0.43, green: 0.58, blue: 0.4, alpha: 1)
+        backgroundColor = UIColor(red: 0.45, green: 0.58, blue: 0.45, alpha: 1)
         anchorPoint = CGPoint(x: 0.5, y: 0.5)
 
         setupWorld()
         setupHUD()
+        setupSpawn()
         wireTransport()
 
         transport.send(.hello(playerId: localPlayerId))
     }
 
     private func setupWorld() {
-        let tileSize: CGFloat = 42
-        for x in stride(from: -size.width / 2, through: size.width / 2, by: tileSize) {
-            let vertical = SKShapeNode(rectOf: CGSize(width: 1, height: size.height + 100))
-            vertical.strokeColor = UIColor(white: 0, alpha: 0.1)
-            vertical.position = CGPoint(x: x, y: 0)
-            addChild(vertical)
+        let sky = SKSpriteNode(color: UIColor(red: 0.58, green: 0.71, blue: 0.56, alpha: 1), size: CGSize(width: size.width + 80, height: size.height + 100))
+        sky.zPosition = -4
+        addChild(sky)
+
+        let ground = SKSpriteNode(color: UIColor(red: 0.32, green: 0.4, blue: 0.26, alpha: 1), size: CGSize(width: size.width + 100, height: 110))
+        ground.position = CGPoint(x: 0, y: -size.height / 2 + 55)
+        ground.zPosition = -3
+        addChild(ground)
+
+        switchNode.position = CGPoint(x: level.switchX, y: -148)
+        gateNode.position = CGPoint(x: level.gateX, y: -110)
+        dashPlateNode.position = CGPoint(x: level.dashPlateX, y: -152)
+        winZoneNode.position = CGPoint(x: level.winZoneX, y: -120)
+
+        [switchNode, gateNode, dashPlateNode, winZoneNode, localNode, remoteNode].forEach {
+            $0.zPosition = 2
+            addChild($0)
+        }
+    }
+
+    private func setupSpawn() {
+        let localSpawn: [Double]
+        let remoteSpawn: [Double]
+
+        if localRole == .anchor {
+            localSpawn = level.spawnAnchor
+            remoteSpawn = level.spawnDash
+        } else {
+            localSpawn = level.spawnDash
+            remoteSpawn = level.spawnAnchor
         }
 
-        for y in stride(from: -size.height / 2, through: size.height / 2, by: tileSize) {
-            let horizontal = SKShapeNode(rectOf: CGSize(width: size.width + 100, height: 1))
-            horizontal.strokeColor = UIColor(white: 0, alpha: 0.1)
-            horizontal.position = CGPoint(x: 0, y: y)
-            addChild(horizontal)
-        }
-
-        localNode.zPosition = 2
-        remoteNode.zPosition = 2
-
+        gameState.localPosition = SIMD2<Float>(Float(localSpawn[0]), Float(localSpawn[1]))
         localNode.position = CGPoint(x: CGFloat(gameState.localPosition.x), y: CGFloat(gameState.localPosition.y))
-        remoteNode.position = CGPoint(x: 110, y: 0)
-
-        addChild(localNode)
-        addChild(remoteNode)
+        remoteNode.position = CGPoint(x: remoteSpawn[0], y: remoteSpawn[1])
     }
 
     private func setupHUD() {
-        statusLabel.fontSize = 14
+        statusLabel.fontSize = 13
         statusLabel.horizontalAlignmentMode = .left
         statusLabel.verticalAlignmentMode = .top
         statusLabel.position = CGPoint(x: -size.width / 2 + 12, y: size.height / 2 - 18)
-        statusLabel.zPosition = 3
-        statusLabel.text = "Connected"
-        addChild(statusLabel)
+        statusLabel.text = "Role: \(localRole.rawValue.capitalized)"
+        statusLabel.zPosition = 4
 
-        metricsLabel.fontSize = 12
+        objectiveLabel.fontSize = 11
+        objectiveLabel.horizontalAlignmentMode = .left
+        objectiveLabel.verticalAlignmentMode = .top
+        objectiveLabel.position = CGPoint(x: -size.width / 2 + 12, y: size.height / 2 - 38)
+        objectiveLabel.text = level.objective
+        objectiveLabel.zPosition = 4
+
+        metricsLabel.fontSize = 11
         metricsLabel.horizontalAlignmentMode = .left
         metricsLabel.verticalAlignmentMode = .top
-        metricsLabel.position = CGPoint(x: -size.width / 2 + 12, y: size.height / 2 - 40)
-        metricsLabel.zPosition = 3
-        metricsLabel.text = "RTT: -- ms | PPS: 0"
-        addChild(metricsLabel)
+        metricsLabel.position = CGPoint(x: -size.width / 2 + 12, y: size.height / 2 - 56)
+        metricsLabel.text = "RTT: 0 | PPS: 0"
+        metricsLabel.zPosition = 4
 
-        disconnectLabel.fontSize = 18
-        disconnectLabel.horizontalAlignmentMode = .center
-        disconnectLabel.verticalAlignmentMode = .center
-        disconnectLabel.position = CGPoint(x: 0, y: size.height / 2 - 44)
-        disconnectLabel.zPosition = 4
-        disconnectLabel.text = ""
-        addChild(disconnectLabel)
+        addChild(statusLabel)
+        addChild(objectiveLabel)
+        addChild(metricsLabel)
     }
 
     private func wireTransport() {
@@ -114,18 +143,14 @@ final class GameScene: SKScene {
             self?.handle(message: message)
         }
 
-        transport.onPeerDisconnected = { [weak self] _ in
-            self?.remoteConnected = false
-            self?.disconnectLabel.text = "Peer disconnected"
-            self?.statusLabel.text = "Disconnected"
+        transport.onPeerConnected = { [weak self] _ in
+            self?.remoteConnected = true
+            self?.statusLabel.text = "Connected | \(self?.localRole.rawValue.capitalized ?? "Role")"
         }
 
-        transport.onPeerConnected = { [weak self] _ in
-            guard let self else { return }
-            self.remoteConnected = true
-            self.disconnectLabel.text = ""
-            self.statusLabel.text = "Connected"
-            self.transport.send(.hello(playerId: self.localPlayerId))
+        transport.onPeerDisconnected = { [weak self] _ in
+            self?.remoteConnected = false
+            self?.statusLabel.text = "Partner disconnected"
         }
     }
 
@@ -137,8 +162,8 @@ final class GameScene: SKScene {
 
     override func didChangeSize(_ oldSize: CGSize) {
         statusLabel.position = CGPoint(x: -size.width / 2 + 12, y: size.height / 2 - 18)
-        metricsLabel.position = CGPoint(x: -size.width / 2 + 12, y: size.height / 2 - 40)
-        disconnectLabel.position = CGPoint(x: 0, y: size.height / 2 - 44)
+        objectiveLabel.position = CGPoint(x: -size.width / 2 + 12, y: size.height / 2 - 38)
+        metricsLabel.position = CGPoint(x: -size.width / 2 + 12, y: size.height / 2 - 56)
     }
 
     override func update(_ currentTime: TimeInterval) {
@@ -150,23 +175,67 @@ final class GameScene: SKScene {
         lastUpdateTime = currentTime
 
         stepLocalPlayer(dt: dt)
+        processRoleActions(currentTime: currentTime)
         stepRemotePlayer(currentTime: currentTime)
+        updatePuzzleState()
         stepNetworking(dt: dt, currentTime: currentTime)
         stepMetrics(dt: dt)
+        checkLevelCompletion()
     }
 
     private func stepLocalPlayer(dt: TimeInterval) {
-        let direction = simd_length(inputVector) > 1 ? simd_normalize(inputVector) : inputVector
-        gameState.localVelocity = direction * moveSpeed
-        gameState.localPosition += gameState.localVelocity * Float(dt)
-        gameState.clampLocalPosition(to: SIMD2<Float>(Float(size.width * 0.5 - 20), Float(size.height * 0.5 - 20)))
+        let xOnly = SIMD2<Float>(inputVector.x, 0)
+        let direction = simd_length(xOnly) > 1 ? simd_normalize(xOnly) : xOnly
 
+        var nextVelocity = direction * moveSpeed
+        if localRole == .dash, actionPressed {
+            nextVelocity.x *= 1.9
+        }
+
+        gameState.localVelocity = nextVelocity
+        gameState.localPosition += gameState.localVelocity * Float(dt)
+
+        let minY: Float = -152
+        gameState.localPosition.y = minY
+
+        if !gateIsOpen() {
+            let localX = gameState.localPosition.x
+            if localX > Float(level.gateX - 10), localX < Float(level.gateX + 12) {
+                gameState.localPosition.x = localRole == .anchor ? Float(level.gateX - 18) : Float(level.gateX + 18)
+            }
+        }
+
+        gameState.clampLocalPosition(to: SIMD2<Float>(Float(size.width * 0.5 - 30), Float(size.height * 0.5 - 30)))
         localNode.position = CGPoint(x: CGFloat(gameState.localPosition.x), y: CGFloat(gameState.localPosition.y))
     }
 
+    private func processRoleActions(currentTime: TimeInterval) {
+        if localRole == .anchor {
+            let nearSwitch = abs(localNode.position.x - CGFloat(level.switchX)) < 30
+            let newState = actionPressed && nearSwitch
+            if newState != localSwitchActive {
+                localSwitchActive = newState
+                transport.send(.gameEvent(GameEventPacket(type: "anchor_switch", actorId: localPlayerId, value: newState, ts: currentTime)))
+            }
+        } else {
+            let onPlate = abs(localNode.position.x - CGFloat(level.dashPlateX)) < 20
+            if onPlate != localDashPlateActive {
+                localDashPlateActive = onPlate
+                transport.send(.gameEvent(GameEventPacket(type: "dash_plate", actorId: localPlayerId, value: onPlate, ts: currentTime)))
+            }
+        }
+    }
+
     private func stepRemotePlayer(currentTime: TimeInterval) {
-        guard let interpolated = gameState.interpolatedRemotePosition(at: currentTime) else { return }
-        remoteNode.position = CGPoint(x: CGFloat(interpolated.x), y: CGFloat(interpolated.y))
+        guard let pos = gameState.interpolatedRemotePosition(at: currentTime) else { return }
+        remoteNode.position = CGPoint(x: CGFloat(pos.x), y: CGFloat(pos.y))
+    }
+
+    private func updatePuzzleState() {
+        switchNode.color = (localSwitchActive || remoteSwitchActive) ? .systemYellow : .brown
+        dashPlateNode.color = (localDashPlateActive || remoteDashPlateActive) ? .systemTeal : .orange
+        gateNode.isHidden = gateIsOpen()
+        winZoneNode.color = isExitUnlocked() ? .systemMint : .systemGreen
     }
 
     private func stepNetworking(dt: TimeInterval, currentTime: TimeInterval) {
@@ -202,8 +271,28 @@ final class GameScene: SKScene {
             packetsPerSecond = packetsThisSecond
             packetsThisSecond = 0
         }
-
         metricsLabel.text = "RTT: \(latestRTTMs) ms | PPS: \(packetsPerSecond)"
+    }
+
+    private func checkLevelCompletion() {
+        guard !levelCompleted, isExitUnlocked() else { return }
+
+        let localAtExit = localNode.position.x >= CGFloat(level.winZoneX)
+        let remoteAtExit = remoteNode.position.x >= CGFloat(level.winZoneX)
+
+        if localAtExit && remoteAtExit {
+            levelCompleted = true
+            statusLabel.text = "Level complete!"
+            onLevelCompleted?()
+        }
+    }
+
+    private func gateIsOpen() -> Bool {
+        localSwitchActive || remoteSwitchActive
+    }
+
+    private func isExitUnlocked() -> Bool {
+        localDashPlateActive || remoteDashPlateActive
     }
 
     private func handle(message: NetMessage) {
@@ -214,8 +303,6 @@ final class GameScene: SKScene {
             if playerId != localPlayerId {
                 remotePlayerId = playerId
                 remoteConnected = true
-                disconnectLabel.text = ""
-                statusLabel.text = "Connected"
             }
         case .playerState(let packet):
             guard packet.playerId != localPlayerId else { return }
@@ -223,11 +310,18 @@ final class GameScene: SKScene {
                 remotePlayerId = packet.playerId
             }
             gameState.applyRemoteSnapshot(packet)
-        case .ping(let timestamp):
-            transport.send(.pong(ts: timestamp))
-        case .pong(let timestamp):
-            guard let pending = pendingPingTimestamp, abs(pending - timestamp) < 0.001 else { return }
-            latestRTTMs = Int((CACurrentMediaTime() - timestamp) * 1000)
+        case .gameEvent(let event):
+            guard event.actorId != localPlayerId else { return }
+            if event.type == "anchor_switch" {
+                remoteSwitchActive = event.value
+            } else if event.type == "dash_plate" {
+                remoteDashPlateActive = event.value
+            }
+        case .ping(let ts):
+            transport.send(.pong(ts: ts))
+        case .pong(let ts):
+            guard let pending = pendingPingTimestamp, abs(pending - ts) < 0.001 else { return }
+            latestRTTMs = Int((CACurrentMediaTime() - ts) * 1000)
             pendingPingTimestamp = nil
         }
     }

@@ -4,15 +4,31 @@ import SpriteKit
 final class GameViewController: UIViewController {
     private let transport: SessionTransport
     private let localPlayerId: UUID
+    private let localRole: PlayerRole
+    private let level: DailyLevelV1
+    private let duoId: String
+    private let apiClient: APIClient
 
     private let skView = SKView()
-    private let dPad = VirtualDPad()
+    private let joystick = VirtualDPad()
+    private let actionButton = UIButton(type: .system)
 
     private var gameScene: GameScene?
 
-    init(transport: SessionTransport, localPlayerId: UUID) {
+    init(
+        transport: SessionTransport,
+        localPlayerId: UUID,
+        localRole: PlayerRole,
+        level: DailyLevelV1,
+        duoId: String,
+        apiClient: APIClient
+    ) {
         self.transport = transport
         self.localPlayerId = localPlayerId
+        self.localRole = localRole
+        self.level = level
+        self.duoId = duoId
+        self.apiClient = apiClient
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -22,10 +38,10 @@ final class GameViewController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = UIColor(red: 0.22, green: 0.31, blue: 0.24, alpha: 1)
+        view.backgroundColor = UIColor(red: 0.16, green: 0.24, blue: 0.19, alpha: 1)
 
         setupSKView()
-        setupDPad()
+        setupControls()
         setupBackButton()
         presentScene()
     }
@@ -47,15 +63,31 @@ final class GameViewController: UIViewController {
         ])
     }
 
-    private func setupDPad() {
-        dPad.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(dPad)
+    private func setupControls() {
+        joystick.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(joystick)
+
+        actionButton.translatesAutoresizingMaskIntoConstraints = false
+        actionButton.setTitle(localRole == .anchor ? "Hold" : "Dash", for: .normal)
+        actionButton.setTitleColor(.white, for: .normal)
+        actionButton.backgroundColor = UIColor(red: 0.36, green: 0.47, blue: 0.29, alpha: 0.85)
+        actionButton.layer.cornerRadius = 30
+        actionButton.titleLabel?.font = UIFont.systemFont(ofSize: 18, weight: .bold)
+        actionButton.addTarget(self, action: #selector(actionDown), for: .touchDown)
+        actionButton.addTarget(self, action: #selector(actionUp), for: [.touchUpInside, .touchUpOutside, .touchCancel])
+
+        view.addSubview(actionButton)
 
         NSLayoutConstraint.activate([
-            dPad.widthAnchor.constraint(equalToConstant: 140),
-            dPad.heightAnchor.constraint(equalToConstant: 140),
-            dPad.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor, constant: 16),
-            dPad.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -16)
+            joystick.widthAnchor.constraint(equalToConstant: 140),
+            joystick.heightAnchor.constraint(equalToConstant: 140),
+            joystick.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor, constant: 16),
+            joystick.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -16),
+
+            actionButton.widthAnchor.constraint(equalToConstant: 120),
+            actionButton.heightAnchor.constraint(equalToConstant: 60),
+            actionButton.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -16),
+            actionButton.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -22)
         ])
     }
 
@@ -78,17 +110,69 @@ final class GameViewController: UIViewController {
     }
 
     private func presentScene() {
-        let scene = GameScene(size: UIScreen.main.bounds.size, transport: transport, localPlayerId: localPlayerId)
+        let scene = GameScene(
+            size: UIScreen.main.bounds.size,
+            transport: transport,
+            localPlayerId: localPlayerId,
+            localRole: localRole,
+            level: level
+        )
         scene.scaleMode = .resizeFill
+        scene.onLevelCompleted = { [weak self] in
+            self?.handleLevelCompletion()
+        }
+
         skView.presentScene(scene)
         gameScene = scene
 
-        dPad.onVectorChanged = { [weak scene] vector in
+        joystick.onVectorChanged = { [weak scene] vector in
             scene?.inputVector = vector
         }
     }
 
+    @objc private func actionDown() {
+        gameScene?.actionPressed = true
+    }
+
+    @objc private func actionUp() {
+        gameScene?.actionPressed = false
+    }
+
     @objc private func backTapped() {
         dismiss(animated: true)
+    }
+
+    private func handleLevelCompletion() {
+        Task {
+            do {
+                try await apiClient.recordCompletion(duoId: duoId, levelId: level.levelId)
+                let payload = try await apiClient.fetchPostcardPayload(duoId: duoId)
+                await MainActor.run {
+                    self.presentShareSheet(payload: payload)
+                }
+            } catch {
+                await MainActor.run {
+                    let alert = UIAlertController(title: "Completion Saved Locally", message: error.localizedDescription, preferredStyle: .alert)
+                    alert.addAction(UIAlertAction(title: "OK", style: .default))
+                    self.present(alert, animated: true)
+                }
+            }
+        }
+    }
+
+    private func presentShareSheet(payload: PostcardPayloadV1) {
+        guard let image = skView.snapshot() else { return }
+        let text = "\(payload.duoName) completed \(payload.dateUTC) together. \(payload.stamp)"
+        let activity = UIActivityViewController(activityItems: [text, image], applicationActivities: nil)
+        present(activity, animated: true)
+    }
+}
+
+private extension SKView {
+    func snapshot() -> UIImage? {
+        let renderer = UIGraphicsImageRenderer(bounds: bounds)
+        return renderer.image { _ in
+            drawHierarchy(in: bounds, afterScreenUpdates: true)
+        }
     }
 }

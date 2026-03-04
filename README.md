@@ -1,102 +1,73 @@
-# SwiftGame
+# SwiftGame - Daily Duo MVP
 
-A native Swift + SpriteKit multiplayer game foundation focused on one hard proof first: two devices discover each other and render synchronized movement in real time.
+SwiftGame is a viral-ready co-op ritual MVP:
+- 2 players connect with a room code.
+- One UTC daily level is active.
+- Roles are asymmetric (`Anchor` + `Dash`).
+- Duo streaks and grace token logic are tracked.
+- Completion triggers a postcard share flow.
 
-## Why This Exists
+## Current Implementation
 
-Most game projects fail by overbuilding before proving core technical risk. This project takes the opposite approach:
-- Prove real-time multiplayer reliability first.
-- Build a disciplined product + engineering system around that proof.
-- Expand gameplay only after the networked core is stable.
+Client (iOS):
+- Swift + SpriteKit side-view puzzle scene
+- WebSocket room transport
+- Duo create/join flow
+- Room create/join flow (4-digit code)
+- Daily level fetch + fallback-compatible payload handling
+- Basic streak UI and completion/postcard integration
 
-This repository is intentionally structured to support a long-term product, not just a prototype.
+Backend (Node.js):
+- REST APIs for duo, room, daily level, completion, postcard payload
+- WebSocket relay for real-time state sync
+- Room expiry (10 min idle)
+- Manual daily level content files (`backend/levels/*.json`)
+- Streak + grace token bookkeeping
 
-## Current MVP Status
+## Architecture
 
-Implemented:
-- Native iOS app using SpriteKit.
-- Nearby peer discovery/connection via `MultipeerConnectivity`.
-- Host/Join lobby flow.
-- Two-player movement sync at fixed tick rate.
-- Remote interpolation smoothing.
-- Basic disconnect handling.
-- Unit tests for message codec and interpolation.
+- `SwiftGame/Networking/`: transport, API client, protocol models
+- `SwiftGame/Scenes/`: gameplay simulation and cooperative puzzle loop
+- `SwiftGame/UI/`: lobby + in-game overlays
+- `backend/src/server.js`: API + WebSocket room relay
+- `backend/levels/`: manually-authored daily levels
 
-Not implemented yet:
-- Internet relay/server architecture.
-- Combat/progression/economy loops.
-- World persistence.
-- Content pipeline and production art system.
+## Run Backend
 
-## Fast Start
-
-### Prerequisites
-- macOS with Xcode 26+
-- iOS simulator runtime installed
-- Apple developer signing configured in Xcode for physical device runs
-
-### Build
 ```bash
-DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer \
-xcodebuild -project SwiftGame.xcodeproj \
--scheme SwiftGame \
--destination 'generic/platform=iOS Simulator' build
+cd backend
+npm install
+npm run dev
 ```
 
-### Test
-```bash
-DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer \
-xcodebuild -project SwiftGame.xcodeproj \
--scheme SwiftGame \
--destination 'platform=iOS Simulator,name=iPhone 17' test
-```
+Backend defaults:
+- Port: `8080`
+- Admin key for level publishing: `dev-admin-key`
 
-## Two-Instance Simulation Test
+## Run iOS App
 
-For local multiplayer sanity checks with two simulators:
-1. Open two simulator devices (for example `iPhone 17` and `iPhone 17 Pro`).
-2. Launch app on simulator A.
-3. Launch app on simulator B.
-4. In A: `Host Game`.
-5. In B: `Join Game` and select A.
-6. Confirm both players can move and see each other.
+1. Open `SwiftGame.xcodeproj`.
+2. Run on simulator or device.
+3. In lobby, keep server URL as `http://127.0.0.1:8080` for simulator-on-same-mac.
+4. Player A creates duo + room.
+5. Player B joins duo + room.
+6. Both enter scene and complete puzzle cooperatively.
 
-If Xcode prompts `Replace "SwiftGame"`, enable multiple instances in scheme Run settings.
+## API Summary
 
-## Two-Physical-Device Test
+- `POST /duo/create`
+- `POST /duo/join`
+- `GET /duo/state`
+- `POST /rooms/create`
+- `POST /rooms/join`
+- `GET /daily-level?date=YYYY-MM-DD`
+- `POST /daily-level` (admin publish)
+- `POST /daily-completion`
+- `GET /postcard-payload?duoId=...`
+- `WS /ws?roomCode=....&playerId=...`
 
-1. Install app on iPhone A and iPhone B.
-2. Ensure both devices allow Local Network permissions for SwiftGame.
-3. On A: tap `Host Game`.
-4. On B: tap `Join Game` and select A.
-5. Validate bidirectional movement sync and disconnect behavior.
+## Notes
 
-## Project Layout
-
-- `SwiftGame/`
-  - `App/` lifecycle, scene bootstrap, plist
-  - `Networking/` transport + wire protocol
-  - `Game/` deterministic shared state + interpolation
-  - `Scenes/` SpriteKit simulation/render loop
-  - `UI/` lobby, controls, game container
-- `SwiftGameTests/` unit tests
-- `docs/` strategy, product and engineering specs
-- `AGENTS.md` operating contract for engineers/agents
-
-## Documentation Index
-
-- [AGENTS.md](/Users/yash/Documents/Voltade/Code/swift-game/AGENTS.md)
-- [Product Vision](/Users/yash/Documents/Voltade/Code/swift-game/docs/PRODUCT_VISION.md)
-- [Product Requirements (PDD)](/Users/yash/Documents/Voltade/Code/swift-game/docs/PDD.md)
-- [Technical Design (TDD)](/Users/yash/Documents/Voltade/Code/swift-game/docs/TDD.md)
-- [Engineering Standards](/Users/yash/Documents/Voltade/Code/swift-game/docs/ENGINEERING_STANDARDS.md)
-- [Best Practices](/Users/yash/Documents/Voltade/Code/swift-game/docs/BEST_PRACTICES.md)
-- [Test Strategy](/Users/yash/Documents/Voltade/Code/swift-game/docs/TEST_STRATEGY.md)
-- [Roadmap](/Users/yash/Documents/Voltade/Code/swift-game/docs/ROADMAP.md)
-
-## Non-Negotiables
-
-- No gameplay feature ships without measurable acceptance criteria.
-- No networking behavior changes without deterministic test coverage updates.
-- No visual/content expansion before stability gates remain green.
-- Every change must preserve MVP multiplayer reliability.
+- Redis support can be added via `REDIS_URL`; in-memory store is used by default for local MVP testing.
+- Daily fallback behavior currently resolves to the most recent available previous level.
+- Internal archive is the `backend/levels` store and server memory map (no public replay route).

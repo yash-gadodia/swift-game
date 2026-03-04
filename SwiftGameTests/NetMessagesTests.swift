@@ -15,6 +15,7 @@ final class NetMessagesTests: XCTestCase {
         let samples: [NetMessage] = [
             .hello(playerId: UUID()),
             .playerState(packet),
+            .gameEvent(GameEventPacket(type: "anchor_switch", actorId: UUID(), value: true, ts: 101)),
             .ping(ts: 99),
             .pong(ts: 100)
         ]

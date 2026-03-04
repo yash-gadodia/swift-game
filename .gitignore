@@ -3,3 +3,5 @@ DerivedData/
 *.xcuserstate
 *.xcworkspace/xcuserdata/
 *.xcodeproj/xcuserdata/
+backend/node_modules/
+backend/.env

@@ -27,7 +27,7 @@ tests_target = project.new_target(:unit_test_bundle, 'SwiftGameTests', :ios, '16
 tests_target.add_dependency(app_target)
 
 frameworks_group = project.frameworks_group
-['SpriteKit.framework', 'MultipeerConnectivity.framework'].each do |framework|
+['SpriteKit.framework'].each do |framework|
   ref = frameworks_group.new_file("System/Library/Frameworks/#{framework}")
   app_target.frameworks_build_phase.add_file_reference(ref, true)
 end
@@ -35,7 +35,7 @@ end
 sources = {
   'App' => ['AppDelegate.swift', 'SceneDelegate.swift'],
   'Scenes' => ['GameScene.swift'],
-  'Networking' => ['NetMessages.swift', 'MultipeerSessionManager.swift'],
+  'Networking' => ['NetMessages.swift', 'MultipeerSessionManager.swift', 'APIModels.swift', 'APIClient.swift'],
   'Game' => ['GameState.swift'],
   'UI' => ['LobbyViewController.swift', 'GameViewController.swift', 'VirtualDPad.swift']
 }

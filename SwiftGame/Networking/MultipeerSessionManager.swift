@@ -1,187 +1,153 @@
 import Foundation
-import MultipeerConnectivity
+
+struct PeerSummary: Equatable {
+    let id: String
+    let displayName: String
+}
 
 protocol SessionTransport: AnyObject {
     var connectedPeerCount: Int { get }
-    var availablePeers: [MCPeerID] { get }
+    var roomCode: String? { get }
+    var localRole: PlayerRole? { get }
 
-    var onPeersChanged: (([MCPeerID]) -> Void)? { get set }
-    var onPeerConnected: ((MCPeerID) -> Void)? { get set }
-    var onPeerDisconnected: ((MCPeerID) -> Void)? { get set }
-    var onMessage: ((NetMessage, MCPeerID) -> Void)? { get set }
+    var onPeerConnected: ((PeerSummary) -> Void)? { get set }
+    var onPeerDisconnected: ((PeerSummary) -> Void)? { get set }
+    var onMessage: ((NetMessage, PeerSummary) -> Void)? { get set }
     var onStatusText: ((String) -> Void)? { get set }
+    var onRoomReady: ((String) -> Void)? { get set }
+    var onRoleAssigned: ((PlayerRole) -> Void)? { get set }
 
-    func startHosting(displayName: String)
-    func startBrowsing(displayName: String)
-    func invite(peer: MCPeerID)
+    func connectSocket(serverURL: URL, roomCode: String, playerId: UUID)
     func stop()
     func send(_ message: NetMessage)
 }
 
-final class MultipeerSessionManager: NSObject, SessionTransport {
-    static let serviceType = "swftgmvp"
-
-    private(set) var availablePeers: [MCPeerID] = [] {
-        didSet { onPeersChanged?(availablePeers) }
-    }
+final class WebSocketSessionManager: SessionTransport {
+    private(set) var roomCode: String?
+    private(set) var localRole: PlayerRole?
 
     var connectedPeerCount: Int {
-        session?.connectedPeers.count ?? 0
+        peer == nil ? 0 : 1
     }
 
-    var onPeersChanged: (([MCPeerID]) -> Void)?
-    var onPeerConnected: ((MCPeerID) -> Void)?
-    var onPeerDisconnected: ((MCPeerID) -> Void)?
-    var onMessage: ((NetMessage, MCPeerID) -> Void)?
+    var onPeerConnected: ((PeerSummary) -> Void)?
+    var onPeerDisconnected: ((PeerSummary) -> Void)?
+    var onMessage: ((NetMessage, PeerSummary) -> Void)?
     var onStatusText: ((String) -> Void)?
-
-    private var myPeerID: MCPeerID?
-    private var session: MCSession?
-    private var advertiser: MCNearbyServiceAdvertiser?
-    private var browser: MCNearbyServiceBrowser?
+    var onRoomReady: ((String) -> Void)?
+    var onRoleAssigned: ((PlayerRole) -> Void)?
 
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
 
-    func startHosting(displayName: String) {
-        resetSession(displayName: displayName)
-        guard let myPeerID, let session else { return }
+    private var task: URLSessionWebSocketTask?
+    private var playerId: UUID?
+    private var peer: PeerSummary?
 
-        let advertiser = MCNearbyServiceAdvertiser(peer: myPeerID, discoveryInfo: nil, serviceType: Self.serviceType)
-        advertiser.delegate = self
-        advertiser.startAdvertisingPeer()
-        self.advertiser = advertiser
-        onStatusText?("Hosting as \(myPeerID.displayName). Waiting for player...")
-    }
+    func connectSocket(serverURL: URL, roomCode: String, playerId: UUID) {
+        stop()
 
-    func startBrowsing(displayName: String) {
-        resetSession(displayName: displayName)
-        guard let myPeerID, let session else { return }
-
-        let browser = MCNearbyServiceBrowser(peer: myPeerID, serviceType: Self.serviceType)
-        browser.delegate = self
-        browser.startBrowsingForPeers()
-        self.browser = browser
-        onStatusText?("Browsing nearby hosts as \(myPeerID.displayName)...")
-
-        if session.connectedPeers.isEmpty {
-            availablePeers = []
+        guard var components = URLComponents(url: serverURL, resolvingAgainstBaseURL: false) else {
+            onStatusText?("Invalid server URL")
+            return
         }
-    }
 
-    func invite(peer: MCPeerID) {
-        guard let session, let browser else { return }
-        browser.invitePeer(peer, to: session, withContext: nil, timeout: 12)
-        onStatusText?("Invited \(peer.displayName)...")
+        components.scheme = components.scheme == "https" ? "wss" : "ws"
+        components.path = "/ws"
+        components.queryItems = [
+            URLQueryItem(name: "roomCode", value: roomCode),
+            URLQueryItem(name: "playerId", value: playerId.uuidString)
+        ]
+
+        guard let url = components.url else {
+            onStatusText?("Invalid websocket URL")
+            return
+        }
+
+        self.roomCode = roomCode
+        self.playerId = playerId
+
+        let task = URLSession.shared.webSocketTask(with: url)
+        self.task = task
+        task.resume()
+
+        onStatusText?("Connecting to room \(roomCode)...")
+        onRoomReady?(roomCode)
+        receiveLoop()
     }
 
     func stop() {
-        advertiser?.stopAdvertisingPeer()
-        advertiser = nil
+        task?.cancel(with: .goingAway, reason: nil)
+        task = nil
 
-        browser?.stopBrowsingForPeers()
-        browser = nil
+        if let peer {
+            onPeerDisconnected?(peer)
+        }
 
-        session?.disconnect()
-        session = nil
-
-        availablePeers = []
-        onStatusText?("Stopped")
+        roomCode = nil
+        peer = nil
+        localRole = nil
+        playerId = nil
     }
 
     func send(_ message: NetMessage) {
-        guard let session, !session.connectedPeers.isEmpty else { return }
+        guard let task else { return }
+
+        let envelope = RoomEnvelope(
+            type: "relay",
+            senderId: playerId,
+            role: nil,
+            roomCode: roomCode,
+            message: message
+        )
+
         do {
-            let data = try encoder.encode(message)
-            try session.send(data, toPeers: session.connectedPeers, with: .reliable)
+            let data = try encoder.encode(envelope)
+            task.send(.data(data)) { [weak self] error in
+                if let error {
+                    DispatchQueue.main.async {
+                        self?.onStatusText?("Send failed: \(error.localizedDescription)")
+                    }
+                }
+            }
         } catch {
-            onStatusText?("Send failed: \(error.localizedDescription)")
+            onStatusText?("Encode failed: \(error.localizedDescription)")
         }
     }
 
-    private func resetSession(displayName: String) {
-        stop()
-        let peerID = MCPeerID(displayName: displayName)
-        let session = MCSession(peer: peerID, securityIdentity: nil, encryptionPreference: .required)
-        session.delegate = self
-
-        self.myPeerID = peerID
-        self.session = session
-    }
-}
-
-extension MultipeerSessionManager: MCNearbyServiceAdvertiserDelegate {
-    func advertiser(
-        _ advertiser: MCNearbyServiceAdvertiser,
-        didReceiveInvitationFromPeer peerID: MCPeerID,
-        withContext context: Data?,
-        invitationHandler: @escaping (Bool, MCSession?) -> Void
-    ) {
-        guard let session else {
-            invitationHandler(false, nil)
-            return
-        }
-        guard session.connectedPeers.isEmpty else {
-            invitationHandler(false, nil)
-            onStatusText?("Rejected \(peerID.displayName): session already full")
-            return
-        }
-        invitationHandler(true, session)
-        onStatusText?("Accepted invite from \(peerID.displayName)")
-    }
-
-    func advertiser(
-        _ advertiser: MCNearbyServiceAdvertiser,
-        didNotStartAdvertisingPeer error: Error
-    ) {
-        onStatusText?("Advertising failed: \(error.localizedDescription)")
-    }
-}
-
-extension MultipeerSessionManager: MCNearbyServiceBrowserDelegate {
-    func browser(
-        _ browser: MCNearbyServiceBrowser,
-        foundPeer peerID: MCPeerID,
-        withDiscoveryInfo info: [String: String]?
-    ) {
-        if !availablePeers.contains(peerID) {
-            availablePeers.append(peerID)
-            onStatusText?("Found host: \(peerID.displayName)")
-        }
-    }
-
-    func browser(_ browser: MCNearbyServiceBrowser, lostPeer peerID: MCPeerID) {
-        availablePeers.removeAll(where: { $0 == peerID })
-    }
-
-    func browser(_ browser: MCNearbyServiceBrowser, didNotStartBrowsingForPeers error: Error) {
-        onStatusText?("Browse failed: \(error.localizedDescription)")
-    }
-}
-
-extension MultipeerSessionManager: MCSessionDelegate {
-    func session(_ session: MCSession, peer peerID: MCPeerID, didChange state: MCSessionState) {
-        DispatchQueue.main.async {
-            switch state {
-            case .notConnected:
-                self.onStatusText?("Disconnected: \(peerID.displayName)")
-                self.onPeerDisconnected?(peerID)
-            case .connecting:
-                self.onStatusText?("Connecting to \(peerID.displayName)...")
-            case .connected:
-                self.onStatusText?("Connected: \(peerID.displayName)")
-                self.onPeerConnected?(peerID)
-            @unknown default:
-                self.onStatusText?("Unknown connection state")
+    private func receiveLoop() {
+        task?.receive { [weak self] result in
+            guard let self else { return }
+            switch result {
+            case .failure(let error):
+                DispatchQueue.main.async {
+                    self.onStatusText?("Socket disconnected: \(error.localizedDescription)")
+                    if let peer = self.peer {
+                        self.onPeerDisconnected?(peer)
+                    }
+                }
+            case .success(let message):
+                self.handle(message)
+                self.receiveLoop()
             }
         }
     }
 
-    func session(_ session: MCSession, didReceive data: Data, fromPeer peerID: MCPeerID) {
+    private func handle(_ wsMessage: URLSessionWebSocketTask.Message) {
+        let data: Data
+        switch wsMessage {
+        case .data(let incoming):
+            data = incoming
+        case .string(let string):
+            data = Data(string.utf8)
+        @unknown default:
+            return
+        }
+
         do {
-            let message = try decoder.decode(NetMessage.self, from: data)
+            let envelope = try decoder.decode(RoomEnvelope.self, from: data)
             DispatchQueue.main.async {
-                self.onMessage?(message, peerID)
+                self.process(envelope)
             }
         } catch {
             DispatchQueue.main.async {
@@ -190,34 +156,35 @@ extension MultipeerSessionManager: MCSessionDelegate {
         }
     }
 
-    func session(
-        _ session: MCSession,
-        didReceive stream: InputStream,
-        withName streamName: String,
-        fromPeer peerID: MCPeerID
-    ) {}
+    private func process(_ envelope: RoomEnvelope) {
+        switch envelope.type {
+        case "peer_joined":
+            guard let sender = envelope.senderId else { return }
+            let remote = PeerSummary(id: sender.uuidString, displayName: "Partner")
+            peer = remote
+            onPeerConnected?(remote)
+            onStatusText?("Partner connected")
+        case "peer_left":
+            guard let peer else { return }
+            onPeerDisconnected?(peer)
+            self.peer = nil
+            onStatusText?("Partner disconnected")
+        case "role_assigned":
+            guard let role = envelope.role else { return }
+            localRole = role
+            onRoleAssigned?(role)
+            onStatusText?("Role: \(role.rawValue.capitalized)")
+        case "relay":
+            guard
+                let senderId = envelope.senderId,
+                senderId != playerId,
+                let message = envelope.message
+            else { return }
 
-    func session(
-        _ session: MCSession,
-        didStartReceivingResourceWithName resourceName: String,
-        fromPeer peerID: MCPeerID,
-        with progress: Progress
-    ) {}
-
-    func session(
-        _ session: MCSession,
-        didFinishReceivingResourceWithName resourceName: String,
-        fromPeer peerID: MCPeerID,
-        at localURL: URL?,
-        withError error: Error?
-    ) {}
-
-    func session(
-        _ session: MCSession,
-        didReceiveCertificate certificate: [Any]?,
-        fromPeer peerID: MCPeerID,
-        certificateHandler: @escaping (Bool) -> Void
-    ) {
-        certificateHandler(true)
+            let remote = PeerSummary(id: senderId.uuidString, displayName: "Partner")
+            onMessage?(message, remote)
+        default:
+            break
+        }
     }
 }

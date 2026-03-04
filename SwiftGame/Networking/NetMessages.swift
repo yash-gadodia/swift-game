@@ -1,6 +1,11 @@
 import Foundation
 import simd
 
+enum PlayerRole: String, Codable {
+    case anchor
+    case dash
+}
+
 struct Vector2: Codable, Equatable {
     let x: Float
     let y: Float
@@ -23,9 +28,17 @@ struct PlayerStatePacket: Codable, Equatable {
     let velocity: Vector2
 }
 
+struct GameEventPacket: Codable, Equatable {
+    let type: String
+    let actorId: UUID
+    let value: Bool
+    let ts: TimeInterval
+}
+
 enum NetMessage: Codable, Equatable {
     case hello(playerId: UUID)
     case playerState(PlayerStatePacket)
+    case gameEvent(GameEventPacket)
     case ping(ts: TimeInterval)
     case pong(ts: TimeInterval)
 
@@ -33,6 +46,7 @@ enum NetMessage: Codable, Equatable {
         case type
         case hello
         case playerState
+        case gameEvent
         case ping
         case pong
     }
@@ -40,6 +54,7 @@ enum NetMessage: Codable, Equatable {
     private enum MessageType: String, Codable {
         case hello
         case playerState
+        case gameEvent
         case ping
         case pong
     }
@@ -50,17 +65,15 @@ enum NetMessage: Codable, Equatable {
 
         switch type {
         case .hello:
-            let playerId = try container.decode(UUID.self, forKey: .hello)
-            self = .hello(playerId: playerId)
+            self = .hello(playerId: try container.decode(UUID.self, forKey: .hello))
         case .playerState:
-            let packet = try container.decode(PlayerStatePacket.self, forKey: .playerState)
-            self = .playerState(packet)
+            self = .playerState(try container.decode(PlayerStatePacket.self, forKey: .playerState))
+        case .gameEvent:
+            self = .gameEvent(try container.decode(GameEventPacket.self, forKey: .gameEvent))
         case .ping:
-            let timestamp = try container.decode(TimeInterval.self, forKey: .ping)
-            self = .ping(ts: timestamp)
+            self = .ping(ts: try container.decode(TimeInterval.self, forKey: .ping))
         case .pong:
-            let timestamp = try container.decode(TimeInterval.self, forKey: .pong)
-            self = .pong(ts: timestamp)
+            self = .pong(ts: try container.decode(TimeInterval.self, forKey: .pong))
         }
     }
 
@@ -74,12 +87,23 @@ enum NetMessage: Codable, Equatable {
         case .playerState(let packet):
             try container.encode(MessageType.playerState, forKey: .type)
             try container.encode(packet, forKey: .playerState)
-        case .ping(let timestamp):
+        case .gameEvent(let packet):
+            try container.encode(MessageType.gameEvent, forKey: .type)
+            try container.encode(packet, forKey: .gameEvent)
+        case .ping(let ts):
             try container.encode(MessageType.ping, forKey: .type)
-            try container.encode(timestamp, forKey: .ping)
-        case .pong(let timestamp):
+            try container.encode(ts, forKey: .ping)
+        case .pong(let ts):
             try container.encode(MessageType.pong, forKey: .type)
-            try container.encode(timestamp, forKey: .pong)
+            try container.encode(ts, forKey: .pong)
         }
     }
+}
+
+struct RoomEnvelope: Codable {
+    let type: String
+    let senderId: UUID?
+    let role: PlayerRole?
+    let roomCode: String?
+    let message: NetMessage?
 }

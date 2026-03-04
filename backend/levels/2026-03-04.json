@@ -1,0 +1,19 @@
+{
+  "levelId": "lvl-2026-03-04",
+  "dateUTC": "2026-03-04",
+  "theme": "mossy_dawn",
+  "version": 1,
+  "objective": "Anchor holds the switch, Dash reaches the far plate, then both cross the grove gate.",
+  "entities": [
+    {"kind": "switch", "x": -140, "y": -152, "width": 24, "height": 16},
+    {"kind": "gate", "x": 0, "y": -110, "width": 20, "height": 100},
+    {"kind": "dash_plate", "x": 170, "y": -152, "width": 28, "height": 8},
+    {"kind": "win_zone", "x": 250, "y": -120, "width": 40, "height": 80}
+  ],
+  "spawnAnchor": [-220, -152],
+  "spawnDash": [-180, -152],
+  "winZoneX": 250,
+  "gateX": 0,
+  "switchX": -140,
+  "dashPlateX": 170
+}

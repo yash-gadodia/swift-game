@@ -1,0 +1,18 @@
+{
+  "name": "swiftgame-backend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "lint": "echo 'no lint configured yet'"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.21.2",
+    "ioredis": "^5.4.1",
+    "nanoid": "^5.1.5",
+    "ws": "^8.18.0"
+  }
+}
