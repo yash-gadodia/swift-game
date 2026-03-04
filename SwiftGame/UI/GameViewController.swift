@@ -68,13 +68,15 @@ final class GameViewController: UIViewController {
         view.addSubview(joystick)
 
         actionButton.translatesAutoresizingMaskIntoConstraints = false
-        actionButton.setTitle(localRole == .anchor ? "Hold" : "Dash", for: .normal)
+        actionButton.setTitle("Action", for: .normal)
         actionButton.setTitleColor(.white, for: .normal)
         actionButton.backgroundColor = UIColor(red: 0.36, green: 0.47, blue: 0.29, alpha: 0.85)
         actionButton.layer.cornerRadius = 30
         actionButton.titleLabel?.font = UIFont.systemFont(ofSize: 18, weight: .bold)
         actionButton.addTarget(self, action: #selector(actionDown), for: .touchDown)
         actionButton.addTarget(self, action: #selector(actionUp), for: [.touchUpInside, .touchUpOutside, .touchCancel])
+        actionButton.isHidden = true
+        actionButton.isUserInteractionEnabled = false
 
         view.addSubview(actionButton)
 
