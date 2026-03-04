@@ -6,6 +6,7 @@ import express from 'express';
 import cors from 'cors';
 import { WebSocketServer } from 'ws';
 import Redis from 'ioredis';
+import { normalizeRelayPayload } from './protocol.js';
 
 const PORT = Number(process.env.PORT || 8080);
 const REDIS_URL = process.env.REDIS_URL || '';
@@ -521,8 +522,9 @@ wss.on('connection', (ws, req) => {
 
     try {
       const payload = JSON.parse(raw.toString('utf8'));
-      if (payload.type === 'relay') {
-        broadcast(roomCode, payload, ws);
+      const relayPayload = normalizeRelayPayload(payload, roomCode, playerId);
+      if (relayPayload) {
+        broadcast(roomCode, relayPayload, ws);
       }
     } catch (error) {
       console.error('ws_message_error', error.message);
