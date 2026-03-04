@@ -53,6 +53,21 @@ boot_simulator() {
 }
 
 echo "[1/5] Starting backend on :$BACKEND_PORT"
+EXISTING_PID="$(lsof -t -iTCP:"$BACKEND_PORT" -sTCP:LISTEN | head -n1 || true)"
+if [[ -n "${EXISTING_PID:-}" ]]; then
+  EXISTING_CMD="$(ps -p "$EXISTING_PID" -o command= || true)"
+  if [[ "$EXISTING_CMD" == *"node"* ]]; then
+    echo "Port :$BACKEND_PORT in use by PID $EXISTING_PID. Stopping stale node backend."
+    kill "$EXISTING_PID" >/dev/null 2>&1 || true
+    sleep 1
+  else
+    echo "Port :$BACKEND_PORT is in use by non-node process:"
+    echo "  PID $EXISTING_PID -> $EXISTING_CMD"
+    echo "Free the port or change BACKEND_PORT."
+    exit 1
+  fi
+fi
+
 (
   cd "$BACKEND_DIR"
   PORT="$BACKEND_PORT" node --watch src/server.js
