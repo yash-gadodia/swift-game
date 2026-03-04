@@ -12,20 +12,22 @@
 - Wire serialization/deserialization
 - Snapshot ordering/filtering
 - Interpolation/extrapolation math
+- Backend relay payload normalization/anti-spoofing behavior
+- Reconnect retry policy bounds/backoff math
 
 2. Integration Tests (near-term target)
 - Transport callback sequencing
-- Session lifecycle transitions
+- Session lifecycle transitions (including repeated disconnect/reconnect loops)
 
 3. Manual Device Tests (mandatory for multiplayer changes)
-- Host/Join success
+- Room create/join success
 - Bidirectional movement
 - Disconnect/reconnect behavior
 
 ## Required Manual Matrix
 
-- Device A hosts / B joins
-- Device B hosts / A joins
+- Device A creates/enters room, B joins same room
+- Device B creates/enters room, A joins same room
 - Simultaneous movement 30s
 - One device background/foreground
 - Temporary network interruption
@@ -49,3 +51,8 @@ P0/P1 block merge.
 - Unit tests pass
 - Manual matrix executed
 - Any known deviations documented in PR notes
+
+## Local Commands
+
+- iOS/unit path: `xcodebuild -project SwiftGame.xcodeproj -scheme SwiftGame -destination 'platform=iOS Simulator,name=iPhone 17' test`
+- Backend protocol tests: `cd backend && npm test`
