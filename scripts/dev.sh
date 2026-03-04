@@ -8,9 +8,10 @@ SCHEME="${SCHEME:-SwiftGame}"
 BACKEND_PORT="${BACKEND_PORT:-8081}"
 SIM_A_NAME="${SIM_A_NAME:-iPhone 17}"
 SIM_B_NAME="${SIM_B_NAME:-iPhone 17 Pro}"
-DERIVED_DATA_PATH="${DERIVED_DATA_PATH:-$ROOT_DIR/.build/DerivedData}"
+DERIVED_DATA_PATH="${DERIVED_DATA_PATH:-$HOME/Library/Developer/Xcode/DerivedData/SwiftGame-DevScript}"
 LOG_DIR="$ROOT_DIR/.build/logs"
 BACKEND_LOG="$LOG_DIR/backend.log"
+BUILD_LOG="$LOG_DIR/xcodebuild.log"
 
 mkdir -p "$LOG_DIR"
 
@@ -26,8 +27,15 @@ require_cmd xcodebuild
 require_cmd xcrun
 
 if ! xcrun simctl help >/dev/null 2>&1; then
+  if [[ -d "/Applications/Xcode.app/Contents/Developer" ]]; then
+    export DEVELOPER_DIR="/Applications/Xcode.app/Contents/Developer"
+  fi
+fi
+
+if ! xcrun simctl help >/dev/null 2>&1; then
   echo "simctl unavailable. Set Xcode tools path first:"
   echo "  sudo xcode-select -s /Applications/Xcode.app/Contents/Developer"
+  echo "Or launch Xcode once and accept any first-run prompts."
   exit 1
 fi
 
@@ -77,7 +85,11 @@ xcodebuild \
   -configuration Debug \
   -destination "platform=iOS Simulator,id=$SIM_A_UDID" \
   -derivedDataPath "$DERIVED_DATA_PATH" \
-  build >/dev/null
+  build >"$BUILD_LOG" 2>&1 || {
+    echo "Build failed. Last 120 lines:"
+    tail -n 120 "$BUILD_LOG" || true
+    exit 1
+  }
 
 APP_PATH="$(find "$DERIVED_DATA_PATH/Build/Products/Debug-iphonesimulator" -name "SwiftGame.app" | head -n1)"
 if [[ -z "$APP_PATH" ]]; then

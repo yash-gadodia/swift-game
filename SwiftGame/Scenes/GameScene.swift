@@ -233,7 +233,6 @@ final class GameScene: SKScene {
         case .hello(let playerId):
             if playerId != localPlayerId {
                 remotePlayerId = playerId
-                remoteConnected = true
             }
         case .playerState(let packet):
             guard packet.playerId != localPlayerId else { return }
