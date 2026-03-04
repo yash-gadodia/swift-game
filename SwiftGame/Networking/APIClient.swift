@@ -63,6 +63,19 @@ final class APIClient {
         try await request(path: "/daily-level?date=\(dateUTC)", method: "GET", responseType: DailyLevelResponse.self)
     }
 
+    func sendTelemetry(event: String, ts: String, fields: [String: String]) async throws {
+        _ = try await request(
+            path: "/telemetry",
+            method: "POST",
+            body: [
+                "event": event,
+                "ts": ts,
+                "fields": fields
+            ],
+            responseType: TelemetryAckResponse.self
+        )
+    }
+
     private func request<T: Decodable>(
         path: String,
         method: String,

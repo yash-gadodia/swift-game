@@ -83,3 +83,7 @@ struct DailyLevelResponse: Codable {
     let level: DailyLevelV1
     let fallbackUsed: Bool
 }
+
+struct TelemetryAckResponse: Codable {
+    let ok: Bool
+}

@@ -95,8 +95,9 @@ Action:
 - Status update: Added deterministic peer lifecycle transition tests in `SessionLifecycleTrackerTests`.
 - Owner: Agent 6 (follow-up: full manager callback sequencing integration tests with transport/socket stubs)
 3. Telemetry persistence and backend ingestion are not yet implemented.
-- Status: Client emits `session_room_join_started`, `session_connected`, `session_disconnected`, `session_duration_seconds`, `session_reconnect_attempted` from lobby flow.
-- Owner: Agent 7 (follow-up: route events to persistent sink/backend instead of log-only emission)
+- Status update: Client now emits required lobby events to backend `POST /telemetry`, and backend stores recent telemetry in bounded memory + optional Redis list (`swiftgame:telemetry`).
+- Verification: `cd backend && npm test` passes telemetry sanitization tests.
+- Owner: Agent 7 (follow-up: production analytics sink, dashboards, and alerting)
 
 ## Phase 0 Exit Criteria
 

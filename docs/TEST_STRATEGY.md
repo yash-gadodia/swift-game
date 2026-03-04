@@ -12,6 +12,8 @@
 - Wire serialization/deserialization
 - Snapshot ordering/filtering
 - Interpolation/extrapolation math
+- Extrapolation clamp behavior (bounded remote prediction window)
+- Local bounds clamp behavior (no out-of-bounds simulation state)
 - Backend relay payload normalization/anti-spoofing behavior
 - Reconnect retry policy bounds/backoff math
 
@@ -51,6 +53,7 @@ P0/P1 block merge.
 - Unit tests pass
 - Manual matrix executed
 - Any known deviations documented in PR notes
+- Behavior/doc changes reflected in `docs/BEST_PRACTICES.md` and/or `docs/TDD.md` as applicable
 
 ## Local Commands
 

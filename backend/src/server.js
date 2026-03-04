@@ -7,6 +7,7 @@ import cors from 'cors';
 import { WebSocketServer } from 'ws';
 import Redis from 'ioredis';
 import { normalizeRelayPayload } from './protocol.js';
+import { sanitizeTelemetryEvent } from './telemetry.js';
 
 const PORT = Number(process.env.PORT || 8080);
 const REDIS_URL = process.env.REDIS_URL || '';
@@ -29,7 +30,8 @@ const memory = {
   completions: new Set(),
   duoCompletionAwards: new Set(),
   roomCompletionMembers: new Map(),
-  dailyLevels: new Map()
+  dailyLevels: new Map(),
+  telemetry: []
 };
 
 const wsRooms = new Map();
@@ -184,6 +186,32 @@ function roomState(roomCode) {
 
 app.get('/health', (_req, res) => {
   res.json({ ok: true, ts: new Date().toISOString() });
+});
+
+app.post('/telemetry', async (req, res) => {
+  const ipAddress = req.headers['x-forwarded-for']?.toString().split(',')[0]?.trim() || req.socket.remoteAddress || 'unknown';
+  const normalized = sanitizeTelemetryEvent(req.body, ipAddress);
+  if (normalized.error) {
+    return res.status(400).json({ error: normalized.error });
+  }
+
+  const event = normalized.value;
+  memory.telemetry.push(event);
+  if (memory.telemetry.length > 5000) {
+    memory.telemetry.shift();
+  }
+
+  if (redis) {
+    try {
+      const payload = JSON.stringify(event);
+      await redis.lpush('swiftgame:telemetry', payload);
+      await redis.ltrim('swiftgame:telemetry', 0, 4999);
+    } catch (error) {
+      console.error('telemetry_redis_error', error.message);
+    }
+  }
+
+  res.status(202).json({ ok: true });
 });
 
 app.post('/duo/create', (req, res) => {

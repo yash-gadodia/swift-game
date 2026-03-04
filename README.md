@@ -94,6 +94,7 @@ sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
 - `POST /daily-level` (admin publish)
 - `POST /daily-completion`
 - `GET /postcard-payload?duoId=...`
+- `POST /telemetry`
 - `WS /ws?roomCode=....&playerId=...`
 
 ## Notes

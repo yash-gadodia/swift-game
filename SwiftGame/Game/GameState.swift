@@ -47,7 +47,7 @@ final class GameState {
         if remoteSnapshots.count == 1 {
             let only = remoteSnapshots[0]
             let dt = Float(max(0, target - only.ts))
-            return only.position + only.velocity * dt
+            return only.position + only.velocity * min(dt, 0.25)
         }
 
         var previous = remoteSnapshots[0]

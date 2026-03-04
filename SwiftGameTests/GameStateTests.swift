@@ -102,4 +102,32 @@ final class GameStateTests: XCTestCase {
         XCTAssertEqual(state.remoteSnapshots.first?.seq, 9)
         XCTAssertEqual(state.remoteSnapshots.last?.seq, 40)
     }
+
+    func testExtrapolationIsClampedToQuarterSecond() {
+        let state = GameState(localPosition: .zero)
+
+        let snapshot = PlayerStatePacket(
+            playerId: UUID(),
+            seq: 1,
+            ts: 5,
+            position: Vector2(SIMD2<Float>(2, 3)),
+            velocity: Vector2(SIMD2<Float>(4, 0))
+        )
+
+        state.applyRemoteSnapshot(snapshot)
+        let result = state.interpolatedRemotePosition(at: 8, interpolationDelay: 0)
+
+        XCTAssertNotNil(result)
+        XCTAssertEqual(result?.x ?? -1, 3, accuracy: 0.001)
+        XCTAssertEqual(result?.y ?? -1, 3, accuracy: 0.001)
+    }
+
+    func testClampLocalPositionBoundsXAndY() {
+        let state = GameState(localPosition: SIMD2<Float>(12, -14))
+
+        state.clampLocalPosition(to: SIMD2<Float>(5, 7))
+
+        XCTAssertEqual(state.localPosition.x, 5, accuracy: 0.001)
+        XCTAssertEqual(state.localPosition.y, -7, accuracy: 0.001)
+    }
 }
