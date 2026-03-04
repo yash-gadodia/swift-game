@@ -1,6 +1,10 @@
 import Foundation
 import simd
 
+enum ProtocolVersion {
+    static let current = 1
+}
+
 enum PlayerRole: String, Codable {
     case anchor
     case dash
@@ -100,10 +104,46 @@ enum NetMessage: Codable, Equatable {
     }
 }
 
-struct RoomEnvelope: Codable {
+struct RoomEnvelope: Codable, Equatable {
+    let version: Int
     let type: String
     let senderId: UUID?
     let role: PlayerRole?
     let roomCode: String?
     let message: NetMessage?
+
+    init(
+        version: Int = ProtocolVersion.current,
+        type: String,
+        senderId: UUID?,
+        role: PlayerRole?,
+        roomCode: String?,
+        message: NetMessage?
+    ) {
+        self.version = version
+        self.type = type
+        self.senderId = senderId
+        self.role = role
+        self.roomCode = roomCode
+        self.message = message
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case version
+        case type
+        case senderId
+        case role
+        case roomCode
+        case message
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        version = try container.decodeIfPresent(Int.self, forKey: .version) ?? ProtocolVersion.current
+        type = try container.decode(String.self, forKey: .type)
+        senderId = try container.decodeIfPresent(UUID.self, forKey: .senderId)
+        role = try container.decodeIfPresent(PlayerRole.self, forKey: .role)
+        roomCode = try container.decodeIfPresent(String.self, forKey: .roomCode)
+        message = try container.decodeIfPresent(NetMessage.self, forKey: .message)
+    }
 }
