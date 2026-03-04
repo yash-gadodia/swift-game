@@ -53,6 +53,36 @@ Backend defaults:
 5. Player B joins duo + room.
 6. Both enter scene and complete puzzle cooperatively.
 
+## Fast Local Dev Loop (Two Simulators, One Command)
+
+Use the helper script to avoid manually running/building each time:
+
+```bash
+./scripts/dev.sh
+```
+
+What it does:
+- Starts backend on `http://127.0.0.1:8081` (watch mode)
+- Boots two simulators
+- Builds app once
+- Installs + launches app on both simulators
+
+Defaults:
+- Simulator A: `iPhone 17`
+- Simulator B: `iPhone 17 Pro`
+
+Override defaults if needed:
+
+```bash
+SIM_A_NAME="iPhone 16e" SIM_B_NAME="iPhone 17" BACKEND_PORT=8081 ./scripts/dev.sh
+```
+
+If `simctl`/`xcodebuild` is missing, set Xcode tools path first:
+
+```bash
+sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+```
+
 ## API Summary
 
 - `POST /duo/create`
