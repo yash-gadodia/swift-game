@@ -6,6 +6,7 @@ final class LobbyViewController: UIViewController {
 
     private let transport: SessionTransport = WebSocketSessionManager()
     private var apiClient: APIClient?
+    private var apiBaseURL: URL?
 
     private var duoProfile: DuoProfileV1?
     private var currentRole: PlayerRole?
@@ -58,8 +59,8 @@ final class LobbyViewController: UIViewController {
         streakLabel.textColor = UIColor(red: 0.84, green: 0.9, blue: 0.73, alpha: 1)
         streakLabel.text = "Duo streak: -"
 
-        configureField(serverField, placeholder: "Server URL (e.g. http://127.0.0.1:8080)")
-        serverField.text = "http://127.0.0.1:8080"
+        configureField(serverField, placeholder: "Server URL (e.g. http://127.0.0.1:8081)")
+        serverField.text = "http://127.0.0.1:8081"
 
         configureField(duoNameField, placeholder: "Duo name (for create)")
         duoNameField.text = "Forest Duo"
@@ -275,20 +276,21 @@ final class LobbyViewController: UIViewController {
     }
 
     private func makeAPIClient() -> APIClient? {
-        if let existing = apiClient {
-            return existing
-        }
         guard let url = URL(string: serverField.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "") else {
             statusLabel.text = "Invalid server URL"
             return nil
         }
+        if let existing = apiClient, apiBaseURL == url {
+            return existing
+        }
         let api = APIClient(baseURL: url)
-        self.apiClient = api
+        apiClient = api
+        apiBaseURL = url
         return api
     }
 
     private func serverURL() -> URL {
-        URL(string: serverField.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "http://127.0.0.1:8080")!
+        URL(string: serverField.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "http://127.0.0.1:8081")!
     }
 
     private static func utcDateString(from date: Date) -> String {

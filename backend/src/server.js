@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import http from 'node:http';
+import { fileURLToPath } from 'node:url';
 import express from 'express';
 import cors from 'cors';
 import { WebSocketServer } from 'ws';
@@ -28,6 +29,8 @@ const memory = {
 };
 
 const wsRooms = new Map();
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 function isoDateUTC(date = new Date()) {
   return date.toISOString().slice(0, 10);
@@ -49,7 +52,7 @@ function generateCode(length = 4) {
 }
 
 function loadInitialLevels() {
-  const levelsDir = path.resolve(process.cwd(), 'backend/levels');
+  const levelsDir = path.resolve(__dirname, '../levels');
   if (!fs.existsSync(levelsDir)) return;
 
   for (const file of fs.readdirSync(levelsDir)) {
