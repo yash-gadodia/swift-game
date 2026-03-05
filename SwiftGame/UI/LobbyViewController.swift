@@ -1,5 +1,21 @@
 import UIKit
 
+struct LobbyOnboardingState {
+    static let seenKey = "ui.lobbyOnboardingSeen.v1"
+
+    var hasSeen: Bool
+
+    var shouldShowCard: Bool { !hasSeen }
+
+    static func load(defaults: UserDefaults = .standard) -> LobbyOnboardingState {
+        LobbyOnboardingState(hasSeen: defaults.bool(forKey: seenKey))
+    }
+
+    func persist(defaults: UserDefaults = .standard) {
+        defaults.set(hasSeen, forKey: Self.seenKey)
+    }
+}
+
 final class LobbyViewController: UIViewController {
     private let localPlayerId = UUID()
     private let localPlayerName = UIDevice.current.name
@@ -21,11 +37,18 @@ final class LobbyViewController: UIViewController {
     private let pasteButton = UIButton(type: .system)
     private let stackCard = UIView()
     private let statusCard = UIView()
+    private let heroCard = UIView()
+    private let heroImageView = UIImageView()
+    private let onboardingCard = UIView()
+    private let onboardingLabel = UILabel()
+    private let onboardingDismissButton = UIButton(type: .system)
     private let gradientLayer = CAGradientLayer()
 
     private var hasPresentedGame = false
     private var hasStartedSessionAttempt = false
     private var connectedAt: Date?
+    private var onboardingState = LobbyOnboardingState.load()
+    private var lastHeroRenderSize: CGSize = .zero
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -36,6 +59,7 @@ final class LobbyViewController: UIViewController {
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         gradientLayer.frame = view.bounds
+        refreshHeroArtIfNeeded()
     }
 
     override var supportedInterfaceOrientations: UIInterfaceOrientationMask {
@@ -48,18 +72,18 @@ final class LobbyViewController: UIViewController {
 
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
         titleLabel.text = "Daily Duo"
-        titleLabel.font = UIFont(name: "AvenirNext-Heavy", size: 40) ?? UIFont.systemFont(ofSize: 40, weight: .heavy)
-        titleLabel.textColor = UIColor(red: 0.96, green: 0.99, blue: 0.94, alpha: 1)
+        titleLabel.font = UIFont(name: "Courier-Bold", size: 34) ?? UIFont.monospacedSystemFont(ofSize: 34, weight: .bold)
+        titleLabel.textColor = PixelTheme.cream
 
         subtitleLabel.translatesAutoresizingMaskIntoConstraints = false
         subtitleLabel.text = "Two-player ritual adventure"
-        subtitleLabel.font = UIFont(name: "AvenirNext-Medium", size: 15) ?? UIFont.systemFont(ofSize: 15, weight: .medium)
-        subtitleLabel.textColor = UIColor(red: 0.82, green: 0.90, blue: 0.84, alpha: 1)
+        subtitleLabel.font = UIFont(name: "Courier", size: 14) ?? UIFont.monospacedSystemFont(ofSize: 14, weight: .medium)
+        subtitleLabel.textColor = PixelTheme.ink.withAlphaComponent(0.82)
 
         statusLabel.translatesAutoresizingMaskIntoConstraints = false
-        statusLabel.font = UIFont.monospacedSystemFont(ofSize: 13, weight: .regular)
+        statusLabel.font = UIFont(name: "Courier", size: 12) ?? UIFont.monospacedSystemFont(ofSize: 12, weight: .regular)
         statusLabel.numberOfLines = 0
-        statusLabel.textColor = UIColor(red: 0.90, green: 0.97, blue: 0.92, alpha: 1)
+        statusLabel.textColor = PixelTheme.cream
         statusLabel.text = "Enter 4-digit room code and tap Play."
         statusLabel.setContentCompressionResistancePriority(.required, for: .vertical)
 
@@ -68,12 +92,12 @@ final class LobbyViewController: UIViewController {
 
         configureField(roomCodeField, placeholder: "Room code (4 digits)")
         roomCodeField.keyboardType = .numberPad
-        roomCodeField.font = UIFont.monospacedDigitSystemFont(ofSize: 21, weight: .semibold)
+        roomCodeField.font = UIFont(name: "Courier-Bold", size: 21) ?? UIFont.monospacedDigitSystemFont(ofSize: 21, weight: .bold)
         roomCodeField.addTarget(self, action: #selector(roomCodeEdited), for: .editingChanged)
 
         configureButton(playButton, title: "Play", action: #selector(playTapped))
         configureButton(pasteButton, title: "Paste", action: #selector(pasteTapped))
-        pasteButton.backgroundColor = UIColor(red: 0.18, green: 0.29, blue: 0.23, alpha: 0.94)
+        PixelTheme.stylePixelButton(pasteButton, fill: PixelTheme.woodMid)
 
         let buttonRow = UIStackView(arrangedSubviews: [playButton, pasteButton])
         buttonRow.translatesAutoresizingMaskIntoConstraints = false
@@ -82,24 +106,66 @@ final class LobbyViewController: UIViewController {
         buttonRow.distribution = .fillEqually
 
         statusCard.translatesAutoresizingMaskIntoConstraints = false
-        statusCard.backgroundColor = UIColor(red: 0.11, green: 0.22, blue: 0.17, alpha: 0.82)
-        statusCard.layer.cornerRadius = 12
-        statusCard.layer.borderColor = UIColor(red: 0.65, green: 0.85, blue: 0.73, alpha: 0.22).cgColor
-        statusCard.layer.borderWidth = 1
+        PixelTheme.stylePixelCard(statusCard)
         statusCard.addSubview(statusLabel)
 
+        heroCard.translatesAutoresizingMaskIntoConstraints = false
+        PixelTheme.stylePixelCard(heroCard)
+
+        heroImageView.translatesAutoresizingMaskIntoConstraints = false
+        heroImageView.image = PixelTheme.pixelBannerImage(size: CGSize(width: 320, height: 118))
+        heroImageView.contentMode = .scaleToFill
+        heroImageView.layer.magnificationFilter = "nearest"
+        heroImageView.layer.minificationFilter = "nearest"
+        heroImageView.layer.cornerRadius = 3
+        heroImageView.layer.masksToBounds = true
+        heroCard.addSubview(heroImageView)
+
+        NSLayoutConstraint.activate([
+            heroImageView.leadingAnchor.constraint(equalTo: heroCard.leadingAnchor, constant: 8),
+            heroImageView.trailingAnchor.constraint(equalTo: heroCard.trailingAnchor, constant: -8),
+            heroImageView.topAnchor.constraint(equalTo: heroCard.topAnchor, constant: 8),
+            heroImageView.bottomAnchor.constraint(equalTo: heroCard.bottomAnchor, constant: -8),
+            heroImageView.heightAnchor.constraint(equalToConstant: 118)
+        ])
+
+        onboardingCard.translatesAutoresizingMaskIntoConstraints = false
+        PixelTheme.stylePixelCard(onboardingCard)
+
+        onboardingLabel.translatesAutoresizingMaskIntoConstraints = false
+        onboardingLabel.font = UIFont(name: "Courier", size: 12) ?? UIFont.monospacedSystemFont(ofSize: 12, weight: .medium)
+        onboardingLabel.textColor = PixelTheme.cream
+        onboardingLabel.numberOfLines = 0
+        onboardingLabel.text = "Quick start: 1) Enter room code. 2) Hold Interact on switch to open gate. 3) Move both players to DUO GOAL."
+
+        onboardingDismissButton.translatesAutoresizingMaskIntoConstraints = false
+        onboardingDismissButton.setTitle("Got It", for: .normal)
+        onboardingDismissButton.titleLabel?.font = UIFont(name: "Courier-Bold", size: 12) ?? UIFont.monospacedSystemFont(ofSize: 12, weight: .bold)
+        PixelTheme.stylePixelButton(onboardingDismissButton, fill: PixelTheme.grassDark)
+        onboardingDismissButton.addTarget(self, action: #selector(dismissOnboarding), for: .touchUpInside)
+
+        onboardingCard.addSubview(onboardingLabel)
+        onboardingCard.addSubview(onboardingDismissButton)
+
+        NSLayoutConstraint.activate([
+            onboardingLabel.leadingAnchor.constraint(equalTo: onboardingCard.leadingAnchor, constant: 10),
+            onboardingLabel.trailingAnchor.constraint(equalTo: onboardingCard.trailingAnchor, constant: -10),
+            onboardingLabel.topAnchor.constraint(equalTo: onboardingCard.topAnchor, constant: 10),
+
+            onboardingDismissButton.topAnchor.constraint(equalTo: onboardingLabel.bottomAnchor, constant: 8),
+            onboardingDismissButton.trailingAnchor.constraint(equalTo: onboardingLabel.trailingAnchor),
+            onboardingDismissButton.bottomAnchor.constraint(equalTo: onboardingCard.bottomAnchor, constant: -10),
+            onboardingDismissButton.widthAnchor.constraint(equalToConstant: 72),
+            onboardingDismissButton.heightAnchor.constraint(equalToConstant: 28)
+        ])
+
         stackCard.translatesAutoresizingMaskIntoConstraints = false
-        stackCard.backgroundColor = UIColor(red: 0.11, green: 0.17, blue: 0.14, alpha: 0.86)
-        stackCard.layer.cornerRadius = 18
-        stackCard.layer.borderColor = UIColor(red: 0.66, green: 0.86, blue: 0.75, alpha: 0.22).cgColor
-        stackCard.layer.borderWidth = 1
-        stackCard.layer.shadowColor = UIColor.black.cgColor
-        stackCard.layer.shadowOpacity = 0.25
-        stackCard.layer.shadowRadius = 16
-        stackCard.layer.shadowOffset = CGSize(width: 0, height: 8)
+        PixelTheme.stylePixelCard(stackCard)
 
         let stack = UIStackView(arrangedSubviews: [
             statusCard,
+            heroCard,
+            onboardingCard,
             serverField,
             roomCodeField,
             buttonRow
@@ -145,6 +211,7 @@ final class LobbyViewController: UIViewController {
         [playButton, pasteButton].forEach {
             $0.heightAnchor.constraint(equalToConstant: 48).isActive = true
         }
+        onboardingCard.isHidden = !onboardingState.shouldShowCard
     }
 
     private func configureField(_ field: UITextField, placeholder: String) {
@@ -152,41 +219,49 @@ final class LobbyViewController: UIViewController {
         field.attributedPlaceholder = NSAttributedString(
             string: placeholder,
             attributes: [
-                .foregroundColor: UIColor(red: 0.73, green: 0.85, blue: 0.78, alpha: 0.78)
+                .foregroundColor: PixelTheme.woodDark.withAlphaComponent(0.55)
             ]
         )
         field.borderStyle = .roundedRect
-        field.backgroundColor = UIColor(red: 0.15, green: 0.25, blue: 0.20, alpha: 0.96)
-        field.textColor = UIColor(red: 0.95, green: 0.99, blue: 0.97, alpha: 1)
-        field.tintColor = UIColor(red: 0.90, green: 0.97, blue: 0.94, alpha: 1)
+        PixelTheme.stylePixelField(field)
         field.autocapitalizationType = .none
         field.autocorrectionType = .no
-        field.layer.cornerRadius = 10
-        field.layer.borderColor = UIColor(red: 0.67, green: 0.87, blue: 0.76, alpha: 0.25).cgColor
-        field.layer.borderWidth = 1
     }
 
     private func configureButton(_ button: UIButton, title: String, action: Selector) {
         button.translatesAutoresizingMaskIntoConstraints = false
         button.setTitle(title, for: .normal)
-        button.titleLabel?.font = UIFont(name: "AvenirNext-DemiBold", size: 18) ?? UIFont.systemFont(ofSize: 18, weight: .semibold)
-        button.setTitleColor(UIColor(red: 0.96, green: 0.99, blue: 0.95, alpha: 1), for: .normal)
-        button.backgroundColor = UIColor(red: 0.23, green: 0.43, blue: 0.30, alpha: 1)
-        button.layer.cornerRadius = 10
-        button.layer.borderColor = UIColor(red: 0.80, green: 0.94, blue: 0.85, alpha: 0.32).cgColor
-        button.layer.borderWidth = 1
+        button.titleLabel?.font = UIFont(name: "Courier-Bold", size: 17) ?? UIFont.monospacedSystemFont(ofSize: 17, weight: .bold)
+        PixelTheme.stylePixelButton(button)
         button.addTarget(self, action: action, for: .touchUpInside)
     }
 
     private func setupBackground() {
-        view.backgroundColor = UIColor(red: 0.08, green: 0.14, blue: 0.12, alpha: 1)
-        gradientLayer.colors = [
-            UIColor(red: 0.13, green: 0.24, blue: 0.20, alpha: 1).cgColor,
-            UIColor(red: 0.07, green: 0.15, blue: 0.12, alpha: 1).cgColor
-        ]
-        gradientLayer.startPoint = CGPoint(x: 0, y: 0)
-        gradientLayer.endPoint = CGPoint(x: 1, y: 1)
+        view.backgroundColor = PixelTheme.skyBottom
+        let pixelGradient = PixelTheme.pixelBackgroundGradientLayer()
+        gradientLayer.colors = pixelGradient.colors
+        gradientLayer.startPoint = pixelGradient.startPoint
+        gradientLayer.endPoint = pixelGradient.endPoint
         view.layer.insertSublayer(gradientLayer, at: 0)
+
+        let hill = UIView()
+        hill.translatesAutoresizingMaskIntoConstraints = false
+        hill.backgroundColor = PixelTheme.grassDark
+        hill.isUserInteractionEnabled = false
+        view.addSubview(hill)
+        NSLayoutConstraint.activate([
+            hill.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            hill.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            hill.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            hill.heightAnchor.constraint(equalTo: view.heightAnchor, multiplier: 0.24)
+        ])
+    }
+
+    private func refreshHeroArtIfNeeded() {
+        let targetSize = CGSize(width: max(180, heroImageView.bounds.width), height: max(90, heroImageView.bounds.height))
+        guard targetSize != .zero, targetSize != lastHeroRenderSize else { return }
+        heroImageView.image = PixelTheme.pixelBannerImage(size: targetSize)
+        lastHeroRenderSize = targetSize
     }
 
     private func wireCallbacks() {
@@ -231,7 +306,15 @@ final class LobbyViewController: UIViewController {
     }
 
     @objc private func playTapped() {
-        guard let api = makeAPIClient() else { return }
+        guard let serverURL = configuredServerURL() else {
+            statusLabel.text = "Invalid server URL"
+            return
+        }
+        if let warning = localhostConfigurationWarning(for: serverURL) {
+            statusLabel.text = warning
+            return
+        }
+        guard let api = makeAPIClient(serverURL: serverURL) else { return }
         let roomCode = normalizedRoomCode()
         guard roomCode.count == 4 else {
             statusLabel.text = "Invalid code: enter 4 digits"
@@ -249,13 +332,19 @@ final class LobbyViewController: UIViewController {
 
         Task {
             do {
+                _ = try await api.startSession(playerId: localPlayerId)
                 let room = try await api.enterRoom(roomCode: roomCode, playerId: localPlayerId, playerName: localPlayerName)
                 let daily = try await api.fetchDailyLevel(for: Self.utcDateString(from: Date()))
                 await MainActor.run {
                     self.activeLevel = daily.level
                     self.currentRole = room.role
                     self.activeRoomCode = room.roomCode
-                    self.transport.connectSocket(serverURL: self.serverURL(), roomCode: room.roomCode, playerId: self.localPlayerId)
+                    self.transport.connectSocket(
+                        serverURL: serverURL,
+                        roomCode: room.roomCode,
+                        playerId: self.localPlayerId,
+                        sessionToken: api.sessionToken
+                    )
 
                     if room.partnerConnected {
                         self.statusLabel.text = "Partner connected. Joining game..."
@@ -279,6 +368,18 @@ final class LobbyViewController: UIViewController {
 
     @objc private func roomCodeEdited() {
         roomCodeField.text = normalizedRoomCode()
+    }
+
+    @objc private func dismissOnboarding() {
+        guard onboardingState.shouldShowCard else { return }
+        onboardingState.hasSeen = true
+        onboardingState.persist()
+        UIView.animate(withDuration: 0.2, animations: {
+            self.onboardingCard.alpha = 0
+        }, completion: { _ in
+            self.onboardingCard.isHidden = true
+            self.onboardingCard.alpha = 1
+        })
     }
 
     private func normalizedRoomCode() -> String {
@@ -311,11 +412,7 @@ final class LobbyViewController: UIViewController {
         present(gameVC, animated: true)
     }
 
-    private func makeAPIClient() -> APIClient? {
-        guard let url = URL(string: serverField.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "") else {
-            statusLabel.text = "Invalid server URL"
-            return nil
-        }
+    private func makeAPIClient(serverURL url: URL) -> APIClient? {
         if let existing = apiClient, apiBaseURL == url {
             return existing
         }
@@ -325,14 +422,28 @@ final class LobbyViewController: UIViewController {
         return api
     }
 
-    private func serverURL() -> URL {
-        URL(string: serverField.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "http://127.0.0.1:8081")!
+    private func configuredServerURL() -> URL? {
+        URL(string: serverField.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "")
+    }
+
+    private func localhostConfigurationWarning(for url: URL) -> String? {
+        guard let host = url.host?.lowercased() else { return nil }
+        let isLocalhost = host == "localhost" || host == "127.0.0.1"
+        guard isLocalhost else { return nil }
+        #if targetEnvironment(simulator)
+        return nil
+        #else
+        return "On iPhone, localhost points to the phone. Use your Mac LAN IP (e.g. http://192.168.x.x:8081)."
+        #endif
     }
 
     private func friendlyError(_ error: Error) -> String {
         let msg = error.localizedDescription.lowercased()
         if msg.contains("room_full") { return "Room already has 2 players" }
         if msg.contains("invalid_room_code") { return "Invalid code: enter 4 digits" }
+        if msg.contains("could not connect to the server") || msg.contains("timed out") {
+            return "Can't reach server. Check URL and use Mac LAN IP on physical devices."
+        }
         return error.localizedDescription
     }
 
