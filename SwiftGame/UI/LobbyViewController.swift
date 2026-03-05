@@ -115,8 +115,8 @@ final class LobbyViewController: UIViewController {
         heroImageView.translatesAutoresizingMaskIntoConstraints = false
         heroImageView.image = PixelTheme.pixelBannerImage(size: CGSize(width: 320, height: 118))
         heroImageView.contentMode = .scaleToFill
-        heroImageView.layer.magnificationFilter = "nearest"
-        heroImageView.layer.minificationFilter = "nearest"
+        heroImageView.layer.magnificationFilter = .nearest
+        heroImageView.layer.minificationFilter = .nearest
         heroImageView.layer.cornerRadius = 3
         heroImageView.layer.masksToBounds = true
         heroCard.addSubview(heroImageView)

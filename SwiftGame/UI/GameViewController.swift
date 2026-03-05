@@ -2,6 +2,257 @@ import UIKit
 import SpriteKit
 import AVFoundation
 
+enum PixelTheme {
+    static let skyTop = UIColor(red: 0.44, green: 0.72, blue: 0.88, alpha: 1)
+    static let skyBottom = UIColor(red: 0.66, green: 0.86, blue: 0.92, alpha: 1)
+    static let grassDark = UIColor(red: 0.23, green: 0.46, blue: 0.25, alpha: 1)
+    static let grassMid = UIColor(red: 0.31, green: 0.59, blue: 0.30, alpha: 1)
+    static let woodDark = UIColor(red: 0.34, green: 0.22, blue: 0.15, alpha: 1)
+    static let woodMid = UIColor(red: 0.46, green: 0.30, blue: 0.20, alpha: 1)
+    static let cream = UIColor(red: 0.99, green: 0.95, blue: 0.84, alpha: 1)
+    static let ink = UIColor(red: 0.15, green: 0.11, blue: 0.08, alpha: 1)
+    static let accentMint = UIColor(red: 0.69, green: 0.89, blue: 0.64, alpha: 1)
+    static let accentPeach = UIColor(red: 0.95, green: 0.69, blue: 0.53, alpha: 1)
+
+    static func stylePixelCard(_ view: UIView) {
+        view.backgroundColor = woodMid.withAlphaComponent(0.94)
+        view.layer.cornerRadius = 4
+        view.layer.borderWidth = 2
+        view.layer.borderColor = woodDark.cgColor
+        view.layer.shadowColor = UIColor.black.cgColor
+        view.layer.shadowOpacity = 0.22
+        view.layer.shadowRadius = 0
+        view.layer.shadowOffset = CGSize(width: 0, height: 2)
+    }
+
+    static func stylePixelButton(_ button: UIButton, fill: UIColor = grassMid, stroke: UIColor = woodDark) {
+        button.backgroundColor = fill
+        button.layer.cornerRadius = 4
+        button.layer.borderWidth = 2
+        button.layer.borderColor = stroke.cgColor
+        button.setTitleColor(cream, for: .normal)
+        button.setTitleColor(cream.withAlphaComponent(0.75), for: .highlighted)
+        button.layer.shadowColor = UIColor.black.cgColor
+        button.layer.shadowOpacity = 0.2
+        button.layer.shadowRadius = 0
+        button.layer.shadowOffset = CGSize(width: 0, height: 2)
+    }
+
+    static func stylePixelField(_ field: UITextField) {
+        field.backgroundColor = UIColor(red: 0.93, green: 0.91, blue: 0.82, alpha: 1)
+        field.textColor = ink
+        field.tintColor = woodDark
+        field.layer.cornerRadius = 4
+        field.layer.borderWidth = 2
+        field.layer.borderColor = woodDark.cgColor
+    }
+
+    static func pixelBackgroundGradientLayer() -> CAGradientLayer {
+        let layer = CAGradientLayer()
+        layer.colors = [skyTop.cgColor, skyBottom.cgColor]
+        layer.startPoint = CGPoint(x: 0.5, y: 0)
+        layer.endPoint = CGPoint(x: 0.5, y: 1)
+        return layer
+    }
+
+    static func pixelBannerImage(size: CGSize) -> UIImage {
+        let renderer = UIGraphicsImageRenderer(size: size)
+        return renderer.image { ctx in
+            let cg = ctx.cgContext
+            let pixel: CGFloat = 4
+
+            cg.setFillColor(skyTop.cgColor)
+            cg.fill(CGRect(origin: .zero, size: size))
+
+            cg.setFillColor(skyBottom.cgColor)
+            cg.fill(CGRect(x: 0, y: size.height * 0.42, width: size.width, height: size.height * 0.58))
+
+            cg.setFillColor(grassDark.cgColor)
+            cg.fill(CGRect(x: 0, y: size.height * 0.68, width: size.width, height: size.height * 0.32))
+
+            cg.setFillColor(grassMid.cgColor)
+            var x: CGFloat = 0
+            while x < size.width {
+                let wobble = CGFloat(Int(x / pixel) % 3) * pixel
+                cg.fill(CGRect(x: x, y: size.height * 0.64 + wobble * 0.2, width: pixel * 3, height: pixel * 2))
+                x += pixel * 5
+            }
+
+            func drawCharacter(origin: CGPoint, shirt: UIColor, hair: UIColor, accent: UIColor) {
+                let p = pixel
+                cg.setFillColor(hair.cgColor)
+                cg.fill(CGRect(x: origin.x + p, y: origin.y, width: p * 4, height: p))
+                cg.fill(CGRect(x: origin.x, y: origin.y + p, width: p * 6, height: p))
+                cg.setFillColor(UIColor(red: 0.99, green: 0.88, blue: 0.76, alpha: 1).cgColor)
+                cg.fill(CGRect(x: origin.x + p, y: origin.y + p * 2, width: p * 4, height: p * 2))
+                cg.setFillColor(shirt.cgColor)
+                cg.fill(CGRect(x: origin.x + p, y: origin.y + p * 4, width: p * 4, height: p * 3))
+                cg.setFillColor(accent.cgColor)
+                cg.fill(CGRect(x: origin.x, y: origin.y + p * 5, width: p, height: p * 2))
+                cg.fill(CGRect(x: origin.x + p * 5, y: origin.y + p * 5, width: p, height: p * 2))
+                cg.setFillColor(woodDark.cgColor)
+                cg.fill(CGRect(x: origin.x + p, y: origin.y + p * 7, width: p, height: p * 2))
+                cg.fill(CGRect(x: origin.x + p * 4, y: origin.y + p * 7, width: p, height: p * 2))
+            }
+
+            drawCharacter(
+                origin: CGPoint(x: size.width * 0.24, y: size.height * 0.42),
+                shirt: accentMint,
+                hair: UIColor(red: 0.38, green: 0.25, blue: 0.16, alpha: 1),
+                accent: cream
+            )
+            drawCharacter(
+                origin: CGPoint(x: size.width * 0.56, y: size.height * 0.42),
+                shirt: accentPeach,
+                hair: UIColor(red: 0.26, green: 0.20, blue: 0.14, alpha: 1),
+                accent: cream
+            )
+
+            cg.setFillColor(cream.withAlphaComponent(0.8).cgColor)
+            cg.fill(CGRect(x: size.width * 0.14, y: size.height * 0.2, width: pixel * 10, height: pixel * 2))
+            cg.fill(CGRect(x: size.width * 0.68, y: size.height * 0.15, width: pixel * 8, height: pixel * 2))
+        }
+    }
+}
+
+enum PixelBitmapFont {
+    private static let glyphWidth = 5
+    private static let glyphHeight = 7
+    private static let spacing = 1
+    private static let glyphs: [Character: [String]] = [
+        "A": ["01110","10001","10001","11111","10001","10001","10001"],
+        "B": ["11110","10001","10001","11110","10001","10001","11110"],
+        "C": ["01111","10000","10000","10000","10000","10000","01111"],
+        "D": ["11110","10001","10001","10001","10001","10001","11110"],
+        "E": ["11111","10000","10000","11110","10000","10000","11111"],
+        "F": ["11111","10000","10000","11110","10000","10000","10000"],
+        "G": ["01111","10000","10000","10111","10001","10001","01110"],
+        "H": ["10001","10001","10001","11111","10001","10001","10001"],
+        "I": ["11111","00100","00100","00100","00100","00100","11111"],
+        "J": ["00001","00001","00001","00001","10001","10001","01110"],
+        "K": ["10001","10010","10100","11000","10100","10010","10001"],
+        "L": ["10000","10000","10000","10000","10000","10000","11111"],
+        "M": ["10001","11011","10101","10101","10001","10001","10001"],
+        "N": ["10001","11001","10101","10011","10001","10001","10001"],
+        "O": ["01110","10001","10001","10001","10001","10001","01110"],
+        "P": ["11110","10001","10001","11110","10000","10000","10000"],
+        "Q": ["01110","10001","10001","10001","10101","10010","01101"],
+        "R": ["11110","10001","10001","11110","10100","10010","10001"],
+        "S": ["01111","10000","10000","01110","00001","00001","11110"],
+        "T": ["11111","00100","00100","00100","00100","00100","00100"],
+        "U": ["10001","10001","10001","10001","10001","10001","01110"],
+        "V": ["10001","10001","10001","10001","10001","01010","00100"],
+        "W": ["10001","10001","10001","10101","10101","11011","10001"],
+        "X": ["10001","10001","01010","00100","01010","10001","10001"],
+        "Y": ["10001","10001","01010","00100","00100","00100","00100"],
+        "Z": ["11111","00001","00010","00100","01000","10000","11111"],
+        "0": ["01110","10001","10011","10101","11001","10001","01110"],
+        "1": ["00100","01100","00100","00100","00100","00100","01110"],
+        "2": ["01110","10001","00001","00010","00100","01000","11111"],
+        "3": ["11110","00001","00001","01110","00001","00001","11110"],
+        "4": ["00010","00110","01010","10010","11111","00010","00010"],
+        "5": ["11111","10000","10000","11110","00001","00001","11110"],
+        "6": ["01110","10000","10000","11110","10001","10001","01110"],
+        "7": ["11111","00001","00010","00100","01000","01000","01000"],
+        "8": ["01110","10001","10001","01110","10001","10001","01110"],
+        "9": ["01110","10001","10001","01111","00001","00001","01110"],
+        ":": ["00000","00100","00100","00000","00100","00100","00000"],
+        "|": ["00100","00100","00100","00100","00100","00100","00100"],
+        ".": ["00000","00000","00000","00000","00000","01100","01100"],
+        "-": ["00000","00000","00000","11111","00000","00000","00000"],
+        " ": ["00000","00000","00000","00000","00000","00000","00000"],
+        "?": ["01110","10001","00010","00100","00100","00000","00100"]
+    ]
+
+    static func render(text: String, color: UIColor, scale: CGFloat) -> UIImage {
+        let upper = text.uppercased()
+        let width = max(1, upper.count * (glyphWidth + spacing) - spacing)
+        let height = glyphHeight
+        let size = CGSize(width: CGFloat(width) * scale, height: CGFloat(height) * scale)
+        let renderer = UIGraphicsImageRenderer(size: size)
+        return renderer.image { ctx in
+            let cg = ctx.cgContext
+            cg.setFillColor(UIColor.clear.cgColor)
+            cg.fill(CGRect(origin: .zero, size: size))
+            cg.setFillColor(color.cgColor)
+
+            var cursor = 0
+            for character in upper {
+                let glyph = glyphs[character] ?? glyphs["?"]!
+                for (rowIndex, row) in glyph.enumerated() {
+                    for (colIndex, bit) in row.enumerated() where bit == "1" {
+                        cg.fill(CGRect(
+                            x: CGFloat(cursor + colIndex) * scale,
+                            y: CGFloat(rowIndex) * scale,
+                            width: scale,
+                            height: scale
+                        ))
+                    }
+                }
+                cursor += glyphWidth + spacing
+            }
+        }
+    }
+}
+
+struct GameUISettings: Equatable {
+    var soundEnabled: Bool
+    var effectsIntensity: Float
+    var hapticsEnabled: Bool
+}
+
+struct GameSettingsStore {
+    static let soundEnabledKey = "ui.soundEnabled"
+    static let effectsIntensityKey = "ui.effectsIntensity"
+    static let hapticsEnabledKey = "ui.hapticsEnabled"
+
+    static func load(defaults: UserDefaults = .standard) -> GameUISettings {
+        let hasSoundValue = defaults.object(forKey: soundEnabledKey) != nil
+        let hasHapticsValue = defaults.object(forKey: hapticsEnabledKey) != nil
+        let storedIntensity: Float? = {
+            guard let raw = defaults.object(forKey: effectsIntensityKey) else { return nil }
+            if let value = raw as? Float {
+                return value
+            }
+            if let value = raw as? Double {
+                return Float(value)
+            }
+            if let value = raw as? NSNumber {
+                return value.floatValue
+            }
+            return nil
+        }()
+
+        return GameUISettings(
+            soundEnabled: hasSoundValue ? defaults.bool(forKey: soundEnabledKey) : true,
+            effectsIntensity: min(1.2, max(0.2, storedIntensity ?? 1)),
+            hapticsEnabled: hasHapticsValue ? defaults.bool(forKey: hapticsEnabledKey) : true
+        )
+    }
+
+    static func persist(_ settings: GameUISettings, defaults: UserDefaults = .standard) {
+        defaults.set(settings.soundEnabled, forKey: soundEnabledKey)
+        defaults.set(settings.effectsIntensity, forKey: effectsIntensityKey)
+        defaults.set(settings.hapticsEnabled, forKey: hapticsEnabledKey)
+    }
+}
+
+struct GameplayCoachState {
+    static let seenKey = "ui.gameplayCoachSeen.v1"
+
+    var hasSeen: Bool
+
+    var shouldShow: Bool { !hasSeen }
+
+    static func load(defaults: UserDefaults = .standard) -> GameplayCoachState {
+        GameplayCoachState(hasSeen: defaults.bool(forKey: seenKey))
+    }
+
+    func persist(defaults: UserDefaults = .standard) {
+        defaults.set(hasSeen, forKey: Self.seenKey)
+    }
+}
+
 final class GameViewController: UIViewController {
     private let transport: SessionTransport
     private let localPlayerId: UUID
@@ -16,6 +267,8 @@ final class GameViewController: UIViewController {
     private let topHUDCard = UIView()
     private let roomLabel = UILabel()
     private let objectiveLabel = UILabel()
+    private let roomPixelView = UIImageView()
+    private let objectivePixelView = UIImageView()
     private let backButton = UIButton(type: .system)
     private let soundButton = UIButton(type: .system)
     private let settingsButton = UIButton(type: .system)
@@ -24,11 +277,18 @@ final class GameViewController: UIViewController {
     private let intensitySlider = UISlider()
     private let hapticsLabel = UILabel()
     private let hapticsSwitch = UISwitch()
+    private let coachOverlay = UIView()
+    private let coachCard = UIView()
+    private let coachTitleLabel = UILabel()
+    private let coachBodyLabel = UILabel()
+    private let coachConfirmButton = UIButton(type: .system)
 
     private var gameScene: GameScene?
     private let audioEngine = GameAudioEngine()
     private var soundEnabled = true
     private var effectsIntensity: Float = 1
+    private var hapticsEnabled = true
+    private var coachState = GameplayCoachState.load()
 
     init(
         transport: SessionTransport,
@@ -53,15 +313,18 @@ final class GameViewController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = UIColor(red: 0.16, green: 0.24, blue: 0.19, alpha: 1)
+        view.backgroundColor = PixelTheme.skyBottom
 
         setupSKView()
         setupControls()
         setupTopHUD()
         setupSettingsPanel()
+        setupCoachOverlay()
+        loadSettings()
         audioEngine.applyTheme(level.theme)
         audioEngine.setMasterLevel(effectsIntensity)
         presentScene()
+        applyCoachVisibility()
     }
 
     override func viewDidAppear(_ animated: Bool) {
@@ -99,15 +362,13 @@ final class GameViewController: UIViewController {
         view.addSubview(joystick)
 
         actionButton.translatesAutoresizingMaskIntoConstraints = false
-        actionButton.setTitle("Action", for: .normal)
-        actionButton.setTitleColor(.white, for: .normal)
-        actionButton.backgroundColor = UIColor(red: 0.36, green: 0.47, blue: 0.29, alpha: 0.85)
-        actionButton.layer.cornerRadius = 30
-        actionButton.titleLabel?.font = UIFont.systemFont(ofSize: 18, weight: .bold)
+        actionButton.setTitle("Interact", for: .normal)
+        actionButton.titleLabel?.font = UIFont(name: "Courier-Bold", size: 17) ?? UIFont.monospacedSystemFont(ofSize: 17, weight: .bold)
+        PixelTheme.stylePixelButton(actionButton, fill: PixelTheme.accentPeach, stroke: PixelTheme.woodDark)
+        actionButton.setTitleColor(PixelTheme.ink, for: .normal)
+        actionButton.layer.cornerRadius = 8
         actionButton.addTarget(self, action: #selector(actionDown), for: .touchDown)
         actionButton.addTarget(self, action: #selector(actionUp), for: [.touchUpInside, .touchUpOutside, .touchCancel])
-        actionButton.isHidden = true
-        actionButton.isUserInteractionEnabled = false
 
         view.addSubview(actionButton)
 
@@ -126,25 +387,30 @@ final class GameViewController: UIViewController {
 
     private func setupTopHUD() {
         topHUDCard.translatesAutoresizingMaskIntoConstraints = false
-        topHUDCard.backgroundColor = UIColor(red: 0.06, green: 0.15, blue: 0.11, alpha: 0.74)
-        topHUDCard.layer.cornerRadius = 14
-        topHUDCard.layer.borderColor = UIColor(red: 0.75, green: 0.9, blue: 0.80, alpha: 0.26).cgColor
-        topHUDCard.layer.borderWidth = 1
-        topHUDCard.layer.shadowColor = UIColor.black.cgColor
-        topHUDCard.layer.shadowOpacity = 0.28
-        topHUDCard.layer.shadowRadius = 10
-        topHUDCard.layer.shadowOffset = CGSize(width: 0, height: 4)
+        PixelTheme.stylePixelCard(topHUDCard)
 
         roomLabel.translatesAutoresizingMaskIntoConstraints = false
-        roomLabel.font = UIFont.monospacedDigitSystemFont(ofSize: 13, weight: .semibold)
-        roomLabel.textColor = UIColor(red: 0.90, green: 0.98, blue: 0.93, alpha: 1)
+        roomLabel.font = UIFont(name: "Courier-Bold", size: 12) ?? UIFont.monospacedSystemFont(ofSize: 12, weight: .bold)
+        roomLabel.textColor = PixelTheme.cream
         roomLabel.text = "ROOM \(roomCode) | \(localRole.rawValue.uppercased())"
+        roomLabel.isHidden = true
+
+        roomPixelView.translatesAutoresizingMaskIntoConstraints = false
+        roomPixelView.contentMode = .left
+        roomPixelView.layer.magnificationFilter = .nearest
+        roomPixelView.layer.minificationFilter = .nearest
 
         objectiveLabel.translatesAutoresizingMaskIntoConstraints = false
-        objectiveLabel.font = UIFont(name: "AvenirNext-Medium", size: 12) ?? UIFont.systemFont(ofSize: 12, weight: .medium)
-        objectiveLabel.textColor = UIColor(red: 0.80, green: 0.90, blue: 0.84, alpha: 1)
+        objectiveLabel.font = UIFont(name: "Courier", size: 12) ?? UIFont.monospacedSystemFont(ofSize: 12, weight: .medium)
+        objectiveLabel.textColor = PixelTheme.cream.withAlphaComponent(0.88)
         objectiveLabel.numberOfLines = 2
         objectiveLabel.text = level.objective
+        objectiveLabel.isHidden = true
+
+        objectivePixelView.translatesAutoresizingMaskIntoConstraints = false
+        objectivePixelView.contentMode = .left
+        objectivePixelView.layer.magnificationFilter = .nearest
+        objectivePixelView.layer.minificationFilter = .nearest
 
         backButton.translatesAutoresizingMaskIntoConstraints = false
         backButton.setTitle("Back", for: .normal)
@@ -170,6 +436,8 @@ final class GameViewController: UIViewController {
         view.addSubview(topHUDCard)
         topHUDCard.addSubview(roomLabel)
         topHUDCard.addSubview(objectiveLabel)
+        topHUDCard.addSubview(roomPixelView)
+        topHUDCard.addSubview(objectivePixelView)
         topHUDCard.addSubview(buttonRow)
 
         NSLayoutConstraint.activate([
@@ -180,58 +448,72 @@ final class GameViewController: UIViewController {
             roomLabel.leadingAnchor.constraint(equalTo: topHUDCard.leadingAnchor, constant: 12),
             roomLabel.trailingAnchor.constraint(equalTo: topHUDCard.trailingAnchor, constant: -12),
             roomLabel.topAnchor.constraint(equalTo: topHUDCard.topAnchor, constant: 10),
+            roomLabel.heightAnchor.constraint(equalToConstant: 0),
+
+            roomPixelView.leadingAnchor.constraint(equalTo: roomLabel.leadingAnchor),
+            roomPixelView.trailingAnchor.constraint(equalTo: roomLabel.trailingAnchor),
+            roomPixelView.topAnchor.constraint(equalTo: topHUDCard.topAnchor, constant: 10),
+            roomPixelView.heightAnchor.constraint(equalToConstant: 20),
 
             objectiveLabel.leadingAnchor.constraint(equalTo: roomLabel.leadingAnchor),
             objectiveLabel.trailingAnchor.constraint(equalTo: roomLabel.trailingAnchor),
             objectiveLabel.topAnchor.constraint(equalTo: roomLabel.bottomAnchor, constant: 4),
+            objectiveLabel.heightAnchor.constraint(equalToConstant: 0),
+
+            objectivePixelView.leadingAnchor.constraint(equalTo: roomLabel.leadingAnchor),
+            objectivePixelView.trailingAnchor.constraint(equalTo: roomLabel.trailingAnchor),
+            objectivePixelView.topAnchor.constraint(equalTo: roomPixelView.bottomAnchor, constant: 2),
+            objectivePixelView.heightAnchor.constraint(equalToConstant: 34),
 
             buttonRow.leadingAnchor.constraint(equalTo: roomLabel.leadingAnchor),
             buttonRow.trailingAnchor.constraint(equalTo: roomLabel.trailingAnchor),
-            buttonRow.topAnchor.constraint(equalTo: objectiveLabel.bottomAnchor, constant: 8),
+            buttonRow.topAnchor.constraint(equalTo: objectivePixelView.bottomAnchor, constant: 8),
             buttonRow.bottomAnchor.constraint(equalTo: topHUDCard.bottomAnchor, constant: -10),
             buttonRow.heightAnchor.constraint(equalToConstant: 30)
         ])
+        refreshTopHUDBitmapLabels()
     }
 
     private func styleTopButton(_ button: UIButton) {
-        button.setTitleColor(UIColor(red: 0.94, green: 0.99, blue: 0.96, alpha: 1), for: .normal)
-        button.titleLabel?.font = UIFont(name: "AvenirNext-DemiBold", size: 13) ?? UIFont.systemFont(ofSize: 13, weight: .semibold)
-        button.backgroundColor = UIColor(red: 0.16, green: 0.28, blue: 0.22, alpha: 0.95)
-        button.layer.cornerRadius = 7
-        button.layer.borderWidth = 1
-        button.layer.borderColor = UIColor(red: 0.77, green: 0.9, blue: 0.82, alpha: 0.35).cgColor
+        button.titleLabel?.font = UIFont(name: "Courier-Bold", size: 12) ?? UIFont.monospacedSystemFont(ofSize: 12, weight: .bold)
+        PixelTheme.stylePixelButton(button, fill: PixelTheme.grassDark)
+        button.layer.cornerRadius = 4
+    }
+
+    private func refreshTopHUDBitmapLabels() {
+        let roomText = roomLabel.text ?? "ROOM \(roomCode)"
+        let objectiveText = objectiveLabel.text ?? level.objective
+        roomPixelView.image = PixelBitmapFont.render(text: roomText, color: PixelTheme.cream, scale: 2)
+        objectivePixelView.image = PixelBitmapFont.render(text: objectiveText, color: PixelTheme.cream.withAlphaComponent(0.9), scale: 2)
     }
 
     private func setupSettingsPanel() {
         settingsCard.translatesAutoresizingMaskIntoConstraints = false
-        settingsCard.backgroundColor = UIColor(red: 0.07, green: 0.16, blue: 0.13, alpha: 0.94)
-        settingsCard.layer.cornerRadius = 12
-        settingsCard.layer.borderWidth = 1
-        settingsCard.layer.borderColor = UIColor(red: 0.74, green: 0.90, blue: 0.79, alpha: 0.26).cgColor
+        PixelTheme.stylePixelCard(settingsCard)
         settingsCard.alpha = 0
         settingsCard.isHidden = true
 
         intensityLabel.translatesAutoresizingMaskIntoConstraints = false
         intensityLabel.text = "FX Intensity"
-        intensityLabel.font = UIFont(name: "AvenirNext-Medium", size: 12) ?? UIFont.systemFont(ofSize: 12, weight: .medium)
-        intensityLabel.textColor = UIColor(red: 0.88, green: 0.96, blue: 0.91, alpha: 1)
+        intensityLabel.font = UIFont(name: "Courier", size: 12) ?? UIFont.monospacedSystemFont(ofSize: 12, weight: .medium)
+        intensityLabel.textColor = PixelTheme.cream
 
         intensitySlider.translatesAutoresizingMaskIntoConstraints = false
         intensitySlider.minimumValue = 0.2
         intensitySlider.maximumValue = 1.2
         intensitySlider.value = effectsIntensity
-        intensitySlider.minimumTrackTintColor = UIColor(red: 0.67, green: 0.89, blue: 0.73, alpha: 1)
-        intensitySlider.maximumTrackTintColor = UIColor(red: 0.35, green: 0.47, blue: 0.40, alpha: 1)
+        intensitySlider.minimumTrackTintColor = PixelTheme.accentMint
+        intensitySlider.maximumTrackTintColor = PixelTheme.woodDark
         intensitySlider.addTarget(self, action: #selector(intensityChanged), for: .valueChanged)
 
         hapticsLabel.translatesAutoresizingMaskIntoConstraints = false
         hapticsLabel.text = "Haptics"
-        hapticsLabel.font = UIFont(name: "AvenirNext-Medium", size: 12) ?? UIFont.systemFont(ofSize: 12, weight: .medium)
-        hapticsLabel.textColor = UIColor(red: 0.88, green: 0.96, blue: 0.91, alpha: 1)
+        hapticsLabel.font = UIFont(name: "Courier", size: 12) ?? UIFont.monospacedSystemFont(ofSize: 12, weight: .medium)
+        hapticsLabel.textColor = PixelTheme.cream
 
         hapticsSwitch.translatesAutoresizingMaskIntoConstraints = false
         hapticsSwitch.isOn = true
-        hapticsSwitch.onTintColor = UIColor(red: 0.42, green: 0.73, blue: 0.52, alpha: 1)
+        hapticsSwitch.onTintColor = PixelTheme.accentMint
         hapticsSwitch.addTarget(self, action: #selector(hapticsChanged), for: .valueChanged)
 
         view.addSubview(settingsCard)
@@ -262,6 +544,65 @@ final class GameViewController: UIViewController {
         ])
     }
 
+    private func setupCoachOverlay() {
+        coachOverlay.translatesAutoresizingMaskIntoConstraints = false
+        coachOverlay.backgroundColor = UIColor.black.withAlphaComponent(0.46)
+        coachOverlay.alpha = 0
+        coachOverlay.isHidden = true
+
+        coachCard.translatesAutoresizingMaskIntoConstraints = false
+        PixelTheme.stylePixelCard(coachCard)
+
+        coachTitleLabel.translatesAutoresizingMaskIntoConstraints = false
+        coachTitleLabel.text = "Controls Guide"
+        coachTitleLabel.font = UIFont(name: "Courier-Bold", size: 18) ?? UIFont.monospacedSystemFont(ofSize: 18, weight: .bold)
+        coachTitleLabel.textColor = PixelTheme.cream
+
+        coachBodyLabel.translatesAutoresizingMaskIntoConstraints = false
+        coachBodyLabel.numberOfLines = 0
+        coachBodyLabel.font = UIFont(name: "Courier", size: 13) ?? UIFont.monospacedSystemFont(ofSize: 13, weight: .medium)
+        coachBodyLabel.textColor = PixelTheme.cream.withAlphaComponent(0.92)
+        coachBodyLabel.text = "Left pad moves your role.\nRight button holds Interact on the switch.\nOpen gate, then hold both players in DUO GOAL."
+
+        coachConfirmButton.translatesAutoresizingMaskIntoConstraints = false
+        coachConfirmButton.setTitle("Start Run", for: .normal)
+        coachConfirmButton.setTitleColor(PixelTheme.cream, for: .normal)
+        coachConfirmButton.titleLabel?.font = UIFont(name: "Courier-Bold", size: 14) ?? UIFont.monospacedSystemFont(ofSize: 14, weight: .bold)
+        PixelTheme.stylePixelButton(coachConfirmButton, fill: PixelTheme.grassDark)
+        coachConfirmButton.addTarget(self, action: #selector(dismissCoachOverlay), for: .touchUpInside)
+
+        view.addSubview(coachOverlay)
+        coachOverlay.addSubview(coachCard)
+        coachCard.addSubview(coachTitleLabel)
+        coachCard.addSubview(coachBodyLabel)
+        coachCard.addSubview(coachConfirmButton)
+
+        NSLayoutConstraint.activate([
+            coachOverlay.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            coachOverlay.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            coachOverlay.topAnchor.constraint(equalTo: view.topAnchor),
+            coachOverlay.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+
+            coachCard.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 24),
+            coachCard.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -24),
+            coachCard.centerYAnchor.constraint(equalTo: view.centerYAnchor),
+
+            coachTitleLabel.leadingAnchor.constraint(equalTo: coachCard.leadingAnchor, constant: 14),
+            coachTitleLabel.trailingAnchor.constraint(equalTo: coachCard.trailingAnchor, constant: -14),
+            coachTitleLabel.topAnchor.constraint(equalTo: coachCard.topAnchor, constant: 14),
+
+            coachBodyLabel.leadingAnchor.constraint(equalTo: coachTitleLabel.leadingAnchor),
+            coachBodyLabel.trailingAnchor.constraint(equalTo: coachTitleLabel.trailingAnchor),
+            coachBodyLabel.topAnchor.constraint(equalTo: coachTitleLabel.bottomAnchor, constant: 8),
+
+            coachConfirmButton.topAnchor.constraint(equalTo: coachBodyLabel.bottomAnchor, constant: 14),
+            coachConfirmButton.trailingAnchor.constraint(equalTo: coachBodyLabel.trailingAnchor),
+            coachConfirmButton.bottomAnchor.constraint(equalTo: coachCard.bottomAnchor, constant: -12),
+            coachConfirmButton.widthAnchor.constraint(equalToConstant: 96),
+            coachConfirmButton.heightAnchor.constraint(equalToConstant: 34)
+        ])
+    }
+
     private func presentScene() {
         let scene = GameScene(
             size: UIScreen.main.bounds.size,
@@ -272,6 +613,7 @@ final class GameViewController: UIViewController {
         )
         scene.scaleMode = .resizeFill
         scene.onLevelCompleted = { [weak self] in
+            self?.audioEngine.playCompletionCue()
             self?.handleLevelCompletion()
         }
         scene.onPeerConnectionChanged = { [weak self] isConnected in
@@ -290,10 +632,12 @@ final class GameViewController: UIViewController {
 
     @objc private func actionDown() {
         gameScene?.actionPressed = true
+        animateActionButton(pressed: true)
     }
 
     @objc private func actionUp() {
         gameScene?.actionPressed = false
+        animateActionButton(pressed: false)
     }
 
     @objc private func backTapped() {
@@ -311,6 +655,7 @@ final class GameViewController: UIViewController {
         } else {
             audioEngine.stop()
         }
+        persistSettings()
     }
 
     @objc private func settingsTapped() {
@@ -331,10 +676,21 @@ final class GameViewController: UIViewController {
     @objc private func intensityChanged() {
         effectsIntensity = intensitySlider.value
         audioEngine.setMasterLevel(effectsIntensity)
+        persistSettings()
     }
 
     @objc private func hapticsChanged() {
         joystick.isHapticsEnabled = hapticsSwitch.isOn
+        hapticsEnabled = hapticsSwitch.isOn
+        persistSettings()
+    }
+
+    @objc private func dismissCoachOverlay() {
+        guard coachState.shouldShow else { return }
+        coachState.hasSeen = true
+        coachState.persist()
+        applyCoachVisibility(animated: true)
+        audioEngine.playUIClick()
     }
 
     private func handlePeerConnectionState(_ isConnected: Bool) {
@@ -344,6 +700,7 @@ final class GameViewController: UIViewController {
         roomLabel.text = isConnected
             ? "ROOM \(roomCode) | \(localRole.rawValue.uppercased()) | LINKED"
             : "ROOM \(roomCode) | \(localRole.rawValue.uppercased()) | WAITING"
+        refreshTopHUDBitmapLabels()
         if isConnected {
             audioEngine.playConnectedCue()
         } else {
@@ -406,6 +763,60 @@ final class GameViewController: UIViewController {
         let activity = UIActivityViewController(activityItems: [text, image], applicationActivities: nil)
         present(activity, animated: true)
     }
+
+    private func animateActionButton(pressed: Bool) {
+        UIView.animate(withDuration: 0.08, delay: 0, options: [.curveEaseOut, .allowUserInteraction]) {
+            self.actionButton.transform = pressed ? CGAffineTransform(scaleX: 0.94, y: 0.94) : .identity
+            self.actionButton.alpha = pressed ? 0.9 : 1
+        }
+    }
+
+    private func loadSettings() {
+        let settings = GameSettingsStore.load()
+        soundEnabled = settings.soundEnabled
+        effectsIntensity = settings.effectsIntensity
+        hapticsEnabled = settings.hapticsEnabled
+
+        soundButton.setTitle(soundEnabled ? "Sound On" : "Sound Off", for: .normal)
+        intensitySlider.value = effectsIntensity
+        hapticsSwitch.isOn = hapticsEnabled
+        joystick.isHapticsEnabled = hapticsEnabled
+    }
+
+    private func persistSettings() {
+        GameSettingsStore.persist(
+            GameUISettings(
+                soundEnabled: soundEnabled,
+                effectsIntensity: effectsIntensity,
+                hapticsEnabled: hapticsEnabled
+            )
+        )
+    }
+
+    private func applyCoachVisibility(animated: Bool = false) {
+        let shouldShow = coachState.shouldShow
+        joystick.isUserInteractionEnabled = !shouldShow
+        actionButton.isEnabled = !shouldShow
+        if shouldShow {
+            coachOverlay.isHidden = false
+        }
+
+        let apply = {
+            self.coachOverlay.alpha = shouldShow ? 1 : 0
+        }
+        let completion: (Bool) -> Void = { _ in
+            if !shouldShow {
+                self.coachOverlay.isHidden = true
+            }
+        }
+
+        if animated {
+            UIView.animate(withDuration: 0.2, delay: 0, options: [.curveEaseOut], animations: apply, completion: completion)
+        } else {
+            apply()
+            completion(true)
+        }
+    }
 }
 
 private extension SKView {
@@ -427,6 +838,7 @@ private final class GameAudioEngine {
     private var movementLoopBuffer: AVAudioPCMBuffer?
     private var connectedCueBuffer: AVAudioPCMBuffer?
     private var disconnectedCueBuffer: AVAudioPCMBuffer?
+    private var completionCueBuffer: AVAudioPCMBuffer?
     private var uiClickBuffer: AVAudioPCMBuffer?
     private var movementVolume: Float = 0
     private var masterLevel: Float = 1
@@ -530,6 +942,7 @@ private final class GameAudioEngine {
             riseTo: profile.disconnectToHz,
             duration: 0.22
         )
+        completionCueBuffer = Self.makeArpeggioCueBuffer(format: format)
     }
 
     func playConnectedCue() {
@@ -545,6 +958,11 @@ private final class GameAudioEngine {
     func playUIClick() {
         guard let uiClickBuffer else { return }
         playCue(uiClickBuffer)
+    }
+
+    func playCompletionCue() {
+        guard let completionCueBuffer else { return }
+        playCue(completionCueBuffer)
     }
 
     private func playCue(_ buffer: AVAudioPCMBuffer) {
@@ -660,6 +1078,37 @@ private final class GameAudioEngine {
             let decay = exp(-35 * t)
             let tone = sin(twoPi * 880 * t) + 0.35 * sin(twoPi * 1240 * t)
             let sample = Float(tone * decay * 0.18)
+            left[frame] = sample
+            right[frame] = sample
+        }
+
+        return buffer
+    }
+
+    private static func makeArpeggioCueBuffer(format: AVAudioFormat) -> AVAudioPCMBuffer? {
+        let duration = 0.42
+        let frameCount = AVAudioFrameCount(format.sampleRate * duration)
+        guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameCount),
+              let channels = buffer.floatChannelData else {
+            return nil
+        }
+
+        buffer.frameLength = frameCount
+        let left = channels[0]
+        let right = channels[1]
+        let sampleRate = format.sampleRate
+        let notes: [Double] = [523.25, 659.25, 783.99, 1046.5]
+        let noteDuration = duration / Double(notes.count)
+        let twoPi = 2.0 * Double.pi
+
+        for frame in 0..<Int(frameCount) {
+            let t = Double(frame) / sampleRate
+            let noteIndex = min(notes.count - 1, Int(t / noteDuration))
+            let noteTime = t - (Double(noteIndex) * noteDuration)
+            let progress = noteTime / noteDuration
+            let envelope = exp(-6 * progress)
+            let tone = sin(twoPi * notes[noteIndex] * t)
+            let sample = Float(tone * envelope * 0.2)
             left[frame] = sample
             right[frame] = sample
         }
